@@ -138,7 +138,7 @@ class FeathrClient(object):
             if self.credential is None:
                 self.credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
 
-            self.feathr_spark_laucher = _FeathrSynapseJobLauncher(
+            self.feathr_spark_launcher = _FeathrSynapseJobLauncher(
                 synapse_dev_url=envutils.get_environment_variable_with_default(
                     'spark_config', 'azure_synapse', 'dev_url'),
                 pool_name=envutils.get_environment_variable_with_default(
