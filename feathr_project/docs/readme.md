@@ -1,0 +1,1 @@
+Please refer to the [python doc release guide](../../docs/dev_guide/update_python_docs.md) for more details.
