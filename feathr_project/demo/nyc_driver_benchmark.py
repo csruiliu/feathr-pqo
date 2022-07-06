@@ -22,7 +22,8 @@ from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import INPUT_CONTEXT, HdfsSource
 from feathr import WindowAggTransformation
 from feathr import TypedKey
-from feathr import RedisSink
+from feathr import RedisSink, HdfsSink
+from feathr.job_utils import get_result_df
 
 
 def config_runtime():
@@ -238,7 +239,7 @@ def build_features(data_source):
     return anchored_feature_dict, derived_feature_dict, key_dict
 
 
-def get_result_df(client: FeathrClient) -> pd.DataFrame:
+def download_result_df(client: FeathrClient) -> pd.DataFrame:
     """Download the job result dataset from cloud as a Pandas dataframe."""
     res_url = client.get_job_result_uri(block=True, timeout_sec=600)
     tmp_dir = tempfile.TemporaryDirectory()
@@ -307,12 +308,12 @@ def main():
                                 output_path=output_path)
     client.wait_job_to_finish(timeout_sec=500)
     end = time.perf_counter()
-    print("Time of getting offline feature: {} seconds".format(end - start))
+    print("#### Time of building and fetching feature from offline store: {} seconds ####".format(end - start))
 
     start = time.perf_counter()
-    df_res = get_result_df(client)
+    df_res = download_result_df(client)
     end = time.perf_counter()
-    print("Time of transferring data from server to local: {} seconds".format(end - start))
+    print("#### Time of transferring data from server to local: {} seconds ####".format(end - start))
     print("Results: {}".format(df_res))
 
     # build dataset for training and serving
@@ -338,10 +339,12 @@ def main():
     print("Model MAPE: {}".format(mean_abs_percent_error))
     print("Model Accuracy: {}".format(1 - mean_abs_percent_error))
 
+    # define backfill time
+    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 20), step=timedelta(days=1))
+
     ########################################################
-    # Materialize feature value into offline/online storage
+    # Materialize feature value into online storage
     ########################################################
-    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 21), step=timedelta(days=2))
     redisSink = RedisSink(table_name="nycTaxiDemoFeature")
     settings = MaterializationSettings("nycTaxiTable",
                                        backfill_time=backfill_time,
@@ -352,16 +355,38 @@ def main():
     client.materialize_features(settings)
     client.wait_job_to_finish(timeout_sec=500)
     end = time.perf_counter()
-    print("Time of materializing features: {} seconds".format(end - start))
+    print("#### Time of materializing features to online store: {} seconds ####".format(end - start))
 
-    # Fetching feature value for online inference
+    # Fetching feature value from online store
     start = time.perf_counter()
     res_online_store = client.get_online_features(feature_table='nycTaxiDemoFeature',
                                                   key='265',
                                                   feature_names=['f_location_avg_fare', 'f_location_max_fare'])
     end = time.perf_counter()
-    print("Time of fetching feature from online store: {} seconds".format(end - start))
+    print("#### Time of fetching feature from online store after materializing: {} seconds ####".format(end - start))
     print("Feature from online store: {}".format(res_online_store))
+
+    ########################################################
+    # Materialize feature value into offline storage
+    ########################################################
+    offline_sink = HdfsSink(output_path=output_path)
+    settings = MaterializationSettings("nycTaxiTable",
+                                       backfill_time=backfill_time,
+                                       sinks=[offline_sink],
+                                       feature_names=["f_location_avg_fare", "f_location_max_fare"])
+
+    start = time.perf_counter()
+    client.materialize_features(settings)
+    client.wait_job_to_finish(timeout_sec=900)
+    end = time.perf_counter()
+    print("#### Time of materializing features to offline store: {} seconds ####".format(end - start))
+
+    # Downloading feature value from offline store
+    start = time.perf_counter()
+    res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
+    end = time.perf_counter()
+    print("#### Time of fetching feature from offline store after materializing: {} seconds ####".format(end - start))
+    print("Feature from online store: {}".format(res_offline_store))
 
 
 if __name__ == "__main__":
