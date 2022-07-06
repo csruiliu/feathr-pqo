@@ -1,6 +1,6 @@
-
 import os
 import glob
+import time
 import tempfile
 import pandas as pd
 import pandavro as pdx
@@ -155,7 +155,7 @@ def build_features(data_source):
 
     f_is_long_trip_distance = Feature(name="f_is_long_trip_distance",
                                       feature_type=BOOLEAN,
-                                      transform="cast_float(trip_distance)>30"),
+                                      transform="cast_float(trip_distance)>30")
 
     f_day_of_week = Feature(name="f_day_of_week",
                             feature_type=INT32,
@@ -301,12 +301,18 @@ def main():
     settings = ObservationSettings(observation_path=wasbs_path,
                                    event_timestamp_column="lpep_dropoff_datetime",
                                    timestamp_format="yyyy-MM-dd HH:mm:ss")
+    start = time.perf_counter()
     client.get_offline_features(observation_settings=settings,
                                 feature_query=feature_query,
                                 output_path=output_path)
     client.wait_job_to_finish(timeout_sec=500)
+    end = time.perf_counter()
+    print("Time of getting offline feature: {} seconds".format(end - start))
 
+    start = time.perf_counter()
     df_res = get_result_df(client)
+    end = time.perf_counter()
+    print("Time of transferring data from server to local: {} seconds".format(end - start))
     print("Results: {}".format(df_res))
 
     # build dataset for training and serving
@@ -329,11 +335,8 @@ def main():
         sum_actuals = sum_actuals + actual_val
 
     mean_abs_percent_error = sum_errors / sum_actuals
-    print("Model MAPE:")
-    print(mean_abs_percent_error)
-    print()
-    print("Model Accuracy:")
-    print(1 - mean_abs_percent_error)
+    print("Model MAPE: {}".format(mean_abs_percent_error))
+    print("Model Accuracy: {}".format(1 - mean_abs_percent_error))
 
     ########################################################
     # Materialize feature value into offline/online storage
@@ -345,11 +348,19 @@ def main():
                                        sinks=[redisSink],
                                        feature_names=["f_location_avg_fare", "f_location_max_fare"])
 
+    start = time.perf_counter()
     client.materialize_features(settings)
     client.wait_job_to_finish(timeout_sec=500)
+    end = time.perf_counter()
+    print("Time of materializing features: {} seconds".format(end - start))
 
     # Fetching feature value for online inference
-    res_online_store = client.get_online_features('nycTaxiDemoFeature', '265', ['f_location_avg_fare', 'f_location_max_fare'])
+    start = time.perf_counter()
+    res_online_store = client.get_online_features(feature_table='nycTaxiDemoFeature',
+                                                  key='265',
+                                                  feature_names=['f_location_avg_fare', 'f_location_max_fare'])
+    end = time.perf_counter()
+    print("Time of fetching feature from online store: {} seconds".format(end - start))
     print("Feature from online store: {}".format(res_online_store))
 
 
