@@ -268,6 +268,7 @@ def dataset_preparation(dataframe_result):
 
 
 def main():
+    print("########################### \n## Config Feathr \n###########################")
     feathr_output = config_feathr()
     feathr_runtime_config = config_runtime()
 
@@ -278,6 +279,7 @@ def main():
     wasbs_path = "wasbs://public@azurefeathrstorage.blob.core.windows.net/sample_data/green_tripdata_2020-04_with_index.csv"
     batch_source = build_data_source(wasbs_path)
 
+    print("########################### \n## Build Features \n###########################")
     anchored_feature_dict, derived_feature_dict, key_dict = build_features(batch_source)
 
     # build features
@@ -292,6 +294,7 @@ def main():
     else:
         output_path = feathr_output
 
+    print("########################### \n## Generate Features \n###########################")
     feature_query = FeatureQuery(feature_list=["f_location_avg_fare",
                                                "f_trip_time_rounded",
                                                "f_is_long_trip_distance",
@@ -306,8 +309,11 @@ def main():
                                 feature_query=feature_query,
                                 output_path=output_path)
     client.wait_job_to_finish(timeout_sec=500)
+
+    print("########################### \n## Fetch Features \n###########################")
     df_res = download_result_df(client)
 
+    print("########################### \n## Start Training \n###########################")
     # build dataset for training and serving
     train_x, test_x, train_y, test_y = dataset_preparation(df_res)
 
@@ -337,6 +343,7 @@ def main():
     ########################################################
     # Materialize feature value into online storage
     ########################################################
+    print("########################### \n## Materialization on online store \n###########################")
     redisSink = RedisSink(table_name="nycTaxiDemoFeature")
     settings = MaterializationSettings("nycTaxiTable",
                                        backfill_time=backfill_time,
@@ -351,11 +358,16 @@ def main():
                                                                  keys=["239", "248", "265"],
                                                                  feature_names=['f_location_avg_fare',
                                                                                 'f_location_max_fare'])
-    print("Features [with key 239, 248, 265] from online store: {}".format(multiple_res_online_store))
+    print("=== Fetch features [with key 239, 248, 265] from online store: ===")
+    for key, value in multiple_res_online_store.items():
+        print("{}: {}".format(key, value))
+
+    print(multiple_res_online_store)
 
     ########################################################
     # Materialize feature value into offline storage
     ########################################################
+    print("########################### \n## Materialization on offline store \n###########################")
     offline_sink = HdfsSink(output_path=output_path)
     settings = MaterializationSettings("nycTaxiTable",
                                        backfill_time=backfill_time,
@@ -367,7 +379,7 @@ def main():
 
     # Downloading feature value from offline store
     res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
-    print("Features [with key 239, 248, 265] from offline store: ")
+    print("=== Fetch features [with key 239, 248, 265] from offline store: ===")
     # pd.set_option('display.max_rows', None)
     print(res_offline_store[res_offline_store['key0'].isin(["239", "248", "265"])])
 
