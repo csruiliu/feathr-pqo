@@ -269,6 +269,7 @@ def dataset_preparation(dataframe_result):
 
 
 def main():
+    pd.set_option('display.max_rows', None)
     feathr_output = config_feathr()
     feathr_runtime_config = config_runtime()
 
@@ -310,7 +311,7 @@ def main():
     end = time.perf_counter()
     print("#### Time of building feature from offline store: {} seconds ####".format(end - start))
     perf_description = ("#### Feature building includes extracting data from offline store [Windows Azure Storage Blob]"
-                        "feature computation, putting back to offline store [Azure Blob File System] ####")
+                        ", feature computation, putting back to offline store [Azure Blob File System] ####")
     print(perf_description)
 
     start = time.perf_counter()
@@ -364,12 +365,26 @@ def main():
     start = time.perf_counter()
     multiple_res_online_store = client.multi_get_online_features(feature_table='nycTaxiDemoFeature',
                                                                  keys=["239", "248", "265"],
-                                                                 feature_names=['f_location_avg_fare', 'f_location_max_fare'])
+                                                                 feature_names=['f_location_avg_fare',
+                                                                                'f_location_max_fare'])
     end = time.perf_counter()
-    print("#### Time of fetching three features from online store after materializing: {} seconds ####".format(end - start))
+    print("#### Time of fetching three features from online store after materializing: {} seconds ####".format(
+        end - start))
     print("Feature from online store: {}".format(multiple_res_online_store))
 
-    # Fetching three features from online store
+    # Fetching six features from online store
+    start = time.perf_counter()
+    multiple_res_online_store = client.multi_get_online_features(feature_table='nycTaxiDemoFeature',
+                                                                 keys=["233", "239", "201", "248", "256", "265"],
+                                                                 feature_names=['f_location_avg_fare',
+                                                                                'f_location_max_fare'])
+    end = time.perf_counter()
+    print("#### Time of fetching six features from online store after materializing: {} seconds ####".format(
+        end - start))
+    print("Feature from online store: {}".format(multiple_res_online_store))
+
+    '''
+    # Fetching one feature from online store
     start = time.perf_counter()
     single_res_online_store = client.get_online_features(feature_table='nycTaxiDemoFeature',
                                                          key="240",
@@ -377,6 +392,7 @@ def main():
     end = time.perf_counter()
     print("#### Time of fetching one feature from online store after materializing: {} seconds ####".format(end - start))
     print("Feature from online store: {}".format(single_res_online_store))
+    '''
 
     ########################################################
     # Materialize feature value into offline storage
@@ -398,7 +414,8 @@ def main():
     res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
     end = time.perf_counter()
     print("#### Time of fetching all features from offline store after materializing: {} seconds ####".format(end - start))
-    print("Feature from online store: {}".format(res_offline_store))
+    print("Feature from offline store:")
+    print(res_offline_store)
 
 
 if __name__ == "__main__":
