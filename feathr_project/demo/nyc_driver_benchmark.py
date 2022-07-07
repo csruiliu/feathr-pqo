@@ -367,7 +367,7 @@ def main():
                                                                  feature_names=['f_location_avg_fare',
                                                                                 'f_location_max_fare'])
     end = time.perf_counter()
-    print("#### Time of fetching three features from online store after materialization: {} seconds ####".format(
+    print("#### Time of fetching three features [key: 239, 248, 265] from online store: {} seconds ####".format(
         end - start))
     print("Feature from online store: {}".format(multiple_res_online_store))
 
@@ -378,7 +378,7 @@ def main():
                                                                  feature_names=['f_location_avg_fare',
                                                                                 'f_location_max_fare'])
     end = time.perf_counter()
-    print("#### Time of fetching three features from online store after materialization: {} seconds ####".format(
+    print("#### Time of fetching three features [key: 123, 144, 11] from online store: {} seconds ####".format(
         end - start))
     print("Feature from online store: {}".format(multiple_res_online_store))
 
@@ -389,7 +389,7 @@ def main():
                                                                  feature_names=['f_location_avg_fare',
                                                                                 'f_location_max_fare'])
     end = time.perf_counter()
-    print("#### Time of fetching three features from online store after materialization: {} seconds ####".format(
+    print("#### Time of fetching three features [key: 239, 248, 265] from online store: {} seconds ####".format(
         end - start))
     print("Feature from online store: {}".format(multiple_res_online_store))
 
