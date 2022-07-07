@@ -255,8 +255,8 @@ def download_result_df(client: FeathrClient) -> pd.DataFrame:
 
 def dataset_preparation(dataframe_result):
     final_df = dataframe_result
-    final_df.drop(["lpep_pickup_datetime", "lpep_dropoff_datetime",
-                   "store_and_fwd_flag"], axis=1, inplace=True, errors='ignore')
+    final_df.drop(["lpep_pickup_datetime", "lpep_dropoff_datetime", "store_and_fwd_flag"],
+                  axis=1, inplace=True, errors='ignore')
     final_df.fillna(0, inplace=True)
     final_df['fare_amount'] = final_df['fare_amount'].astype("float64")
 
@@ -309,7 +309,7 @@ def main():
     client.wait_job_to_finish(timeout_sec=500)
     end = time.perf_counter()
     print("#### Time of building feature from offline store: {} seconds ####".format(end - start))
-    perf_description = ("#### Feature building includes extracting data from offline store [Windows Azure Storage Blob]"
+    perf_description = ("#### Feature building includes extracting data from [Windows Azure Storage Blob]"
                         ", feature computation, putting back to offline store [Azure Blob File System] ####")
     print(perf_description)
 

@@ -148,18 +148,22 @@ def build_features(data_source):
     f_trip_distance = Feature(name="f_trip_distance",
                               feature_type=FLOAT,
                               transform="trip_distance")
+    print("#### build feature f_trip_distance ####")
 
     f_trip_time_duration = Feature(name="f_trip_time_duration",
                                    feature_type=INT32,
                                    transform="(to_unix_timestamp(lpep_dropoff_datetime) - to_unix_timestamp(lpep_pickup_datetime))/60")
+    print("#### build feature f_trip_time_duration ####")
 
     f_is_long_trip_distance = Feature(name="f_is_long_trip_distance",
                                       feature_type=BOOLEAN,
                                       transform="cast_float(trip_distance)>30")
+    print("#### build feature f_is_long_trip_distance ####")
 
     f_day_of_week = Feature(name="f_day_of_week",
                             feature_type=INT32,
                             transform="dayofweek(lpep_dropoff_datetime)")
+    print("#### build feature f_day_of_week ####")
 
     features = [
         f_trip_distance,
@@ -186,6 +190,7 @@ def build_features(data_source):
                                   transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
                                                                     agg_func="AVG",
                                                                     window="90d"))
+    print("#### build feature f_location_avg_fare ####")
 
     f_location_max_fare = Feature(name="f_location_max_fare",
                                   key=location_id,
@@ -193,6 +198,7 @@ def build_features(data_source):
                                   transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
                                                                     agg_func="MAX",
                                                                     window="90d"))
+    print("#### build feature f_location_max_fare ####")
 
     f_location_total_fare_cents = Feature(name="f_location_total_fare_cents",
                                           key=location_id,
@@ -200,6 +206,7 @@ def build_features(data_source):
                                           transform=WindowAggTransformation(agg_expr="fare_amount_cents",
                                                                             agg_func="SUM",
                                                                             window="90d"))
+    print("#### build feature f_location_total_fare_cents ####")
 
     agg_features = [
         f_location_avg_fare,
@@ -218,11 +225,13 @@ def build_features(data_source):
                                           feature_type=FLOAT,
                                           input_features=[f_trip_distance, f_trip_time_duration],
                                           transform="f_trip_distance * f_trip_time_duration")
+    print("#### build feature f_trip_time_distance ####")
 
     f_trip_time_rounded = DerivedFeature(name="f_trip_time_rounded",
                                          feature_type=INT32,
                                          input_features=[f_trip_time_duration],
                                          transform="f_trip_time_duration % 10")
+    print("#### build feature f_trip_time_rounded ####")
 
     anchored_feature_dict = dict()
     anchored_feature_dict["request_anchor"] = request_anchor
@@ -334,6 +343,7 @@ def main():
         sum_actuals = sum_actuals + actual_val
 
     mean_abs_percent_error = sum_errors / sum_actuals
+    print("#### Training Results ##### ")
     print("Model MAPE: {}".format(mean_abs_percent_error))
     print("Model Accuracy: {}".format(1 - mean_abs_percent_error))
 
@@ -361,8 +371,6 @@ def main():
     print("=== Fetch features [with key 239, 248, 265] from online store: ===")
     for key, value in multiple_res_online_store.items():
         print("{}: {}".format(key, value))
-
-    print(multiple_res_online_store)
 
     ########################################################
     # Materialize feature value into offline storage
