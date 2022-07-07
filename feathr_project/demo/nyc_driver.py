@@ -1,32 +1,31 @@
-import glob
 import os
+import glob
 import tempfile
-from datetime import datetime, timedelta
-from math import sqrt
-
 import pandas as pd
 import pandavro as pdx
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import dayofweek, dayofyear, col
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
+from datetime import datetime, timedelta
+
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from feathr import FeathrClient
-from feathr import BOOLEAN, FLOAT, INT32, ValueType
+
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col
+
+from feathr import FeathrClient, FeatureQuery, ObservationSettings
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import BackfillTime, MaterializationSettings
-from feathr import FeatureQuery, ObservationSettings
-from feathr import RedisSink
+from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import INPUT_CONTEXT, HdfsSource
 from feathr import WindowAggTransformation
 from feathr import TypedKey
+from feathr import RedisSink, HdfsSink
+from feathr.job_utils import get_result_df
 
 
-def config_environment():
-    import tempfile
+def config_runtime():
     yaml_config = """
     # Please refer to https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml for explanations on the meaning of each field.
     api_version: 1
@@ -86,26 +85,7 @@ def config_environment():
     return tmp
 
 
-def feathr_udf_day_calc(df: DataFrame) -> DataFrame:
-    df = df.withColumn("fare_amount_cents", col("fare_amount")*100)
-    return df
-
-
-def get_result_df(client: FeathrClient) -> pd.DataFrame:
-    """Download the job result dataset from cloud as a Pandas dataframe."""
-    res_url = client.get_job_result_uri(block=True, timeout_sec=600)
-    tmp_dir = tempfile.TemporaryDirectory()
-    client.feathr_spark_launcher.download_result(result_path=res_url, local_folder=tmp_dir.name)
-    dataframe_list = []
-    # assuming the result are in avro format
-    for file in glob.glob(os.path.join(tmp_dir.name, '*.avro')):
-        dataframe_list.append(pdx.read_avro(file))
-    vertical_concat_df = pd.concat(dataframe_list, axis=0)
-    tmp_dir.cleanup()
-    return vertical_concat_df
-
-
-def main():
+def config_feathr():
     #############################
     # Prerequisite Configuration
     #############################
@@ -133,7 +113,8 @@ def main():
     # Set the resource link
     os.environ['spark_config__azure_synapse__dev_url'] = f'https://{synapse_workspace_url}.dev.azuresynapse.net'
     os.environ['spark_config__azure_synapse__pool_name'] = 'spark31'
-    os.environ['spark_config__azure_synapse__workspace_dir'] = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_project'
+    os.environ[
+        'spark_config__azure_synapse__workspace_dir'] = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_project'
     os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
     os.environ['online_store__redis__host'] = redis_host
     os.environ['online_store__redis__port'] = redis_port
@@ -142,80 +123,97 @@ def main():
     os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
     feathr_output_path = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_output'
 
-    feathr_tmp = config_environment()
+    return feathr_output_path
 
-    #######################
-    # Create Feathr Client
-    #######################
-    client = FeathrClient(config_path=feathr_tmp.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
-    dpath = "https://azurefeathrstorage.blob.core.windows.net/public/sample_data/green_tripdata_2020-04_with_index.csv"
-    pd.read_csv(dpath)
 
-    wasbs_path = "wasbs://public@azurefeathrstorage.blob.core.windows.net/sample_data/green_tripdata_2020-04_with_index.csv"
+def feathr_udf_day_calc(df: DataFrame) -> DataFrame:
+    df = df.withColumn("fare_amount_cents", col("fare_amount")*100)
+    return df
+
+
+def build_data_source(data_path):
     batch_source = HdfsSource(name="nycTaxiBatchSource",
-                              path=wasbs_path,
+                              path=data_path,
                               event_timestamp_column="lpep_dropoff_datetime",
                               preprocessing=feathr_udf_day_calc,
                               timestamp_format="yyyy-MM-dd HH:mm:ss")
 
+    return batch_source
+
+
+def build_features(data_source):
     ##############################
-    # Define Anchors and Features
+    # define anchored feature
     ##############################
     f_trip_distance = Feature(name="f_trip_distance",
-                              feature_type=FLOAT, transform="trip_distance")
+                              feature_type=FLOAT,
+                              transform="trip_distance")
+
     f_trip_time_duration = Feature(name="f_trip_time_duration",
                                    feature_type=INT32,
                                    transform="(to_unix_timestamp(lpep_dropoff_datetime) - to_unix_timestamp(lpep_pickup_datetime))/60")
 
+    f_is_long_trip_distance = Feature(name="f_is_long_trip_distance",
+                                      feature_type=BOOLEAN,
+                                      transform="cast_float(trip_distance)>30")
+
+    f_day_of_week = Feature(name="f_day_of_week",
+                            feature_type=INT32,
+                            transform="dayofweek(lpep_dropoff_datetime)")
+
     features = [
         f_trip_distance,
         f_trip_time_duration,
-        Feature(name="f_is_long_trip_distance",
-                feature_type=BOOLEAN,
-                transform="cast_float(trip_distance)>30"),
-        Feature(name="f_day_of_week",
-                feature_type=INT32,
-                transform="dayofweek(lpep_dropoff_datetime)"),
+        f_is_long_trip_distance,
+        f_day_of_week
     ]
 
     request_anchor = FeatureAnchor(name="request_features",
                                    source=INPUT_CONTEXT,
                                    features=features)
 
-    ##############################
-    # Window aggregation features
-    ##############################
+    ################################################
+    # define anchored (aggregated) feature
+    ################################################
     location_id = TypedKey(key_column="DOLocationID",
                            key_column_type=ValueType.INT32,
                            description="location id in NYC",
                            full_name="nyc_taxi.location_id")
-    agg_features = [Feature(name="f_location_avg_fare",
-                            key=location_id,
-                            feature_type=FLOAT,
-                            transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
-                                                              agg_func="AVG",
-                                                              window="90d")),
-                    Feature(name="f_location_max_fare",
-                            key=location_id,
-                            feature_type=FLOAT,
-                            transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
-                                                              agg_func="MAX",
-                                                              window="90d")),
-                    Feature(name="f_location_total_fare_cents",
-                            key=location_id,
-                            feature_type=FLOAT,
-                            transform=WindowAggTransformation(agg_expr="fare_amount_cents",
-                                                              agg_func="SUM",
-                                                              window="90d")),
-                    ]
+
+    f_location_avg_fare = Feature(name="f_location_avg_fare",
+                                  key=location_id,
+                                  feature_type=FLOAT,
+                                  transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
+                                                                    agg_func="AVG",
+                                                                    window="90d"))
+
+    f_location_max_fare = Feature(name="f_location_max_fare",
+                                  key=location_id,
+                                  feature_type=FLOAT,
+                                  transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
+                                                                    agg_func="MAX",
+                                                                    window="90d"))
+
+    f_location_total_fare_cents = Feature(name="f_location_total_fare_cents",
+                                          key=location_id,
+                                          feature_type=FLOAT,
+                                          transform=WindowAggTransformation(agg_expr="fare_amount_cents",
+                                                                            agg_func="SUM",
+                                                                            window="90d"))
+
+    agg_features = [
+        f_location_avg_fare,
+        f_location_max_fare,
+        f_location_total_fare_cents
+    ]
 
     agg_anchor = FeatureAnchor(name="aggregationFeatures",
-                               source=batch_source,
+                               source=data_source,
                                features=agg_features)
 
-    ###########################
-    # Derived Features Section
-    ###########################
+    ##############################
+    # define DerivedFeature
+    ##############################
     f_trip_time_distance = DerivedFeature(name="f_trip_time_distance",
                                           feature_type=FLOAT,
                                           input_features=[f_trip_distance, f_trip_time_duration],
@@ -226,44 +224,36 @@ def main():
                                          input_features=[f_trip_time_duration],
                                          transform="f_trip_time_duration % 10")
 
-    ###########################
-    # Employ Features
-    ###########################
-    client.build_features(anchor_list=[agg_anchor, request_anchor],
-                          derived_feature_list=[f_trip_time_distance, f_trip_time_rounded])
+    anchored_feature_dict = dict()
+    anchored_feature_dict["request_anchor"] = request_anchor
+    anchored_feature_dict["agg_anchor"] = agg_anchor
 
-    ################################################################
-    # Create training data using point-in-time correct feature join
-    ################################################################
-    if client.spark_runtime == 'databricks':
-        output_path = 'dbfs:/feathrazure_test.avro'
-    else:
-        output_path = feathr_output_path
+    derived_feature_dict = dict()
+    derived_feature_dict["f_trip_time_distance"] = f_trip_time_distance
+    derived_feature_dict["f_trip_time_rounded"] = f_trip_time_rounded
 
-    feature_query = FeatureQuery(feature_list=["f_location_avg_fare",
-                                               "f_trip_time_rounded",
-                                               "f_is_long_trip_distance",
-                                               "f_location_total_fare_cents"],
-                                 key=location_id)
-    settings = ObservationSettings(observation_path=wasbs_path,
-                                   event_timestamp_column="lpep_dropoff_datetime",
-                                   timestamp_format="yyyy-MM-dd HH:mm:ss")
-    client.get_offline_features(observation_settings=settings,
-                                feature_query=feature_query,
-                                output_path=output_path)
-    client.wait_job_to_finish(timeout_sec=500)
+    key_dict = dict()
+    key_dict["location_id"] = location_id
 
-    ##########################################
-    # Download the result and show the result
-    ##########################################
-    df_res = get_result_df(client)
-    print("Results: {}".format(df_res))
+    return anchored_feature_dict, derived_feature_dict, key_dict
 
-    #################################
-    # Train a machine learning model
-    #################################
 
-    final_df = df_res
+def download_result_df(client: FeathrClient) -> pd.DataFrame:
+    """Download the job result dataset from cloud as a Pandas dataframe."""
+    res_url = client.get_job_result_uri(block=True, timeout_sec=600)
+    tmp_dir = tempfile.TemporaryDirectory()
+    client.feathr_spark_launcher.download_result(result_path=res_url, local_folder=tmp_dir.name)
+    dataframe_list = []
+    # assuming the result are in avro format
+    for file in glob.glob(os.path.join(tmp_dir.name, '*.avro')):
+        dataframe_list.append(pdx.read_avro(file))
+    vertical_concat_df = pd.concat(dataframe_list, axis=0)
+    tmp_dir.cleanup()
+    return vertical_concat_df
+
+
+def dataset_preparation(dataframe_result):
+    final_df = dataframe_result
     final_df.drop(["lpep_pickup_datetime", "lpep_dropoff_datetime",
                    "store_and_fwd_flag"], axis=1, inplace=True, errors='ignore')
     final_df.fillna(0, inplace=True)
@@ -273,13 +263,59 @@ def main():
                                                         final_df["fare_amount"],
                                                         test_size=0.2,
                                                         random_state=42)
+
+    return train_x, test_x, train_y, test_y
+
+
+def main():
+    feathr_output = config_feathr()
+    feathr_runtime_config = config_runtime()
+
+    # create feathr client
+    client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
+
+    # build data source
+    wasbs_path = "wasbs://public@azurefeathrstorage.blob.core.windows.net/sample_data/green_tripdata_2020-04_with_index.csv"
+    batch_source = build_data_source(wasbs_path)
+
+    anchored_feature_dict, derived_feature_dict, key_dict = build_features(batch_source)
+
+    # build features
+    client.build_features(anchor_list=[anchored_feature_dict["agg_anchor"],
+                                       anchored_feature_dict["request_anchor"]],
+                          derived_feature_list=[derived_feature_dict["f_trip_time_distance"],
+                                                derived_feature_dict["f_trip_time_rounded"]])
+
+    # config output path
+    if client.spark_runtime == 'databricks':
+        output_path = 'dbfs:/feathrazure_test.avro'
+    else:
+        output_path = feathr_output
+
+    feature_query = FeatureQuery(feature_list=["f_location_avg_fare",
+                                               "f_trip_time_rounded",
+                                               "f_is_long_trip_distance",
+                                               "f_location_total_fare_cents"],
+                                 key=key_dict["location_id"])
+
+    settings = ObservationSettings(observation_path=wasbs_path,
+                                   event_timestamp_column="lpep_dropoff_datetime",
+                                   timestamp_format="yyyy-MM-dd HH:mm:ss")
+
+    client.get_offline_features(observation_settings=settings,
+                                feature_query=feature_query,
+                                output_path=output_path)
+    client.wait_job_to_finish(timeout_sec=500)
+    df_res = download_result_df(client)
+
+    # build dataset for training and serving
+    train_x, test_x, train_y, test_y = dataset_preparation(df_res)
+
+    # model training and serving
     model = GradientBoostingRegressor()
     model.fit(train_x, train_y)
-
     y_predict = model.predict(test_x)
-
     y_actual = test_y.values.flatten().tolist()
-    rmse = sqrt(mean_squared_error(y_actual, y_predict))
 
     sum_actuals = sum_errors = 0
 
@@ -292,16 +328,15 @@ def main():
         sum_actuals = sum_actuals + actual_val
 
     mean_abs_percent_error = sum_errors / sum_actuals
-    print("Model MAPE:")
-    print(mean_abs_percent_error)
-    print()
-    print("Model Accuracy:")
-    print(1 - mean_abs_percent_error)
+    print("Model MAPE: {}".format(mean_abs_percent_error))
+    print("Model Accuracy: {}".format(1 - mean_abs_percent_error))
+
+    # define backfill time
+    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 20), step=timedelta(days=1))
 
     ########################################################
-    # Materialize feature value into offline/online storage
+    # Materialize feature value into online storage
     ########################################################
-    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 20), step=timedelta(days=1))
     redisSink = RedisSink(table_name="nycTaxiDemoFeature")
     settings = MaterializationSettings("nycTaxiTable",
                                        backfill_time=backfill_time,
@@ -311,20 +346,30 @@ def main():
     client.materialize_features(settings)
     client.wait_job_to_finish(timeout_sec=500)
 
-    ##############################################
-    # Fetching feature value for online inference
-    ##############################################
-    res = client.get_online_features('nycTaxiDemoFeature', '265', ['f_location_avg_fare', 'f_location_max_fare'])
+    # Fetching three features from online store
+    multiple_res_online_store = client.multi_get_online_features(feature_table='nycTaxiDemoFeature',
+                                                                 keys=["239", "248", "265"],
+                                                                 feature_names=['f_location_avg_fare',
+                                                                                'f_location_max_fare'])
+    print("Features [with key 239, 248, 265] from online store: {}".format(multiple_res_online_store))
 
-    client.multi_get_online_features("nycTaxiDemoFeature",
-                                     ["239", "265"],
-                                     ['f_location_avg_fare', 'f_location_max_fare'])
+    ########################################################
+    # Materialize feature value into offline storage
+    ########################################################
+    offline_sink = HdfsSink(output_path=output_path)
+    settings = MaterializationSettings("nycTaxiTable",
+                                       backfill_time=backfill_time,
+                                       sinks=[offline_sink],
+                                       feature_names=["f_location_avg_fare", "f_location_max_fare"])
 
-    ####################################
-    # Registering and Fetching features
-    ####################################
-    client.register_features()
-    client.list_registered_features(project_name="feathr_getting_started")
+    client.materialize_features(settings)
+    client.wait_job_to_finish(timeout_sec=900)
+
+    # Downloading feature value from offline store
+    res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
+    print("Features [with key 239, 248, 265] from offline store: ")
+    # pd.set_option('display.max_rows', None)
+    print(res_offline_store[res_offline_store['key0'].isin(["239", "248", "265"])])
 
 
 if __name__ == "__main__":

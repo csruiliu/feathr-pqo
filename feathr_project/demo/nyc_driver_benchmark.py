@@ -429,10 +429,21 @@ def main():
     start = time.perf_counter()
     res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
     end = time.perf_counter()
-    print("#### Time of fetching all features from offline store after materializing: {} seconds ####".format(end - start))
+    print("#### Time of fetching all features from offline store after materializing: {} seconds ####".format(
+        end - start))
     print("Feature from offline store:")
-    pd.set_option('display.max_rows', None)
-    print(res_offline_store.sort_values(by="key0"))
+    # pd.set_option('display.max_rows', None)
+    print(res_offline_store)
+
+    # Downloading feature value from offline store
+    start = time.perf_counter()
+    res_offline_store = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
+    end = time.perf_counter()
+    print("#### Time of fetching all features from offline store after materializing: {} seconds ####".format(
+        end - start))
+    print("Feature from offline store:")
+    # pd.set_option('display.max_rows', None)
+    print(res_offline_store)
 
 
 if __name__ == "__main__":
