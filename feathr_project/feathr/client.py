@@ -60,7 +60,6 @@ class FeatureGenerationJobParams:
         self.feature_config = feature_config
 
 
-
 class FeathrClient(object):
     """Feathr client.
 
@@ -74,10 +73,17 @@ class FeathrClient(object):
     environment variable or a Spark cluster. Host address, port and password are needed to start the Redis client.
 
     Attributes:
-        config_path (str, optional): config path. See [Feathr Config Template](https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml) for more details.  Defaults to "./feathr_config.yaml".
-        local_workspace_dir (str, optional): set where is the local work space dir. If not set, Feathr will create a temporary folder to store local workspace related files.
-        credential (optional): credential to access cloud resources,  most likely to be the returned result of DefaultAzureCredential(). If not set, Feathr will initialize DefaultAzureCredential() inside the __init__ function to get credentials.
-        project_registry_tag (Dict[str, str]): adding tags for project in Feathr registry. This might be useful if you want to tag your project as deprecated, or allow certain customizations on project leve. Default is empty
+        config_path (str, optional): config path. Defaults to "./feathr_config.yaml". Feathr Config Template:
+        [github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml]
+
+        local_workspace_dir (str, optional): set where is the local work space dir.
+        If not set, Feathr will create a temporary folder to store local workspace related files.
+
+        credential (optional): credential to access cloud resources, most likely to be the returned result of DefaultAzureCredential().
+        If not set, Feathr will initialize DefaultAzureCredential() inside the __init__ function to get credentials.
+
+        project_registry_tag (Dict[str, str]): adding tags for project in Feathr registry. Default is empty
+        This might be useful if you want to tag your project as deprecated, or allow certain customizations on project level.
 
     Raises:
         RuntimeError: Fail to create the client since necessary environment variables are not set for Redis
@@ -98,7 +104,10 @@ class FeathrClient(object):
         self.envutils = envutils
 
         if not os.path.exists(config_path):
-            self.logger.warning('Configuration path does not exist, you need to set the environment variables explicitly. For all the environment variables, please refer to https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml')
+            self.logger.warning("""Configuration path does not exist, 
+                                you need to set the environment variables explicitly. 
+                                For all the environment variables, 
+                                please refer to https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml""")
 
         # Load all configs from yaml at initialization
         # DO NOT load any configs from yaml during runtime.
@@ -124,15 +133,14 @@ class FeathrClient(object):
             'spark_config', 'spark_cluster')
 
         self.credential = credential
+
         if self.spark_runtime not in {'azure_synapse', 'databricks'}:
-            raise RuntimeError(
-                'Only \'azure_synapse\' and \'databricks\' are currently supported.')
+            raise RuntimeError('Only \'azure_synapse\' and \'databricks\' are currently supported.')
         elif self.spark_runtime == 'azure_synapse':
             # Feathr is a spark-based application so the feathr jar compiled from source code will be used in the
             # Spark job submission. The feathr jar hosted in cloud saves the time users needed to upload the jar from
             # their local env.
-            self._FEATHR_JOB_JAR_PATH = \
-                envutils.get_environment_variable_with_default(
+            self._FEATHR_JOB_JAR_PATH = envutils.get_environment_variable_with_default(
                     'spark_config', 'azure_synapse', 'feathr_runtime_location')
 
             if self.credential is None:
@@ -155,8 +163,7 @@ class FeathrClient(object):
             # Feathr is a spark-based application so the feathr jar compiled from source code will be used in the
             # Spark job submission. The feathr jar hosted in cloud saves the time users needed to upload the jar from
             # their local env.
-            self._FEATHR_JOB_JAR_PATH = \
-                envutils.get_environment_variable_with_default(
+            self._FEATHR_JOB_JAR_PATH = envutils.get_environment_variable_with_default(
                     'spark_config', 'databricks', 'feathr_runtime_location')
 
             self.feathr_spark_launcher = _FeathrDatabricksJobLauncher(
@@ -172,15 +179,20 @@ class FeathrClient(object):
 
         self._construct_redis_client()
 
-
         # initialize registry
         self.registry_delimiter = envutils.get_environment_variable_with_default(
             'feature_registry', 'purview', 'delimiter')
         self.azure_purview_name = envutils.get_environment_variable_with_default(
             'feature_registry', 'purview', 'purview_name')
-        # initialize the registry no matter whether we set purview name or not, given some of the methods are used there.
-        self.registry = _FeatureRegistry(self.project_name, self.azure_purview_name, self.registry_delimiter, project_registry_tag, config_path = config_path, credential=self.credential)
+        # initialize the registry no matter whether we set purview name or not, given some of the methods are used there
+        self.registry = _FeatureRegistry(self.project_name,
+                                         self.azure_purview_name,
+                                         self.registry_delimiter,
+                                         project_registry_tag,
+                                         config_path=config_path,
+                                         credential=self.credential)
 
+    '''
     def _check_required_environment_variables_exist(self):
         """Checks if the required environment variables(form feathr_config.yaml) is set.
 
@@ -190,21 +202,28 @@ class FeathrClient(object):
             if required_field not in os.environ:
                 raise RuntimeError(f'{required_field} is not set in environment variable. All required environment '
                                    f'variables are: {self.required_fields}.')
+    '''
 
     def register_features(self, from_context: bool = True):
         """Registers features based on the current workspace
 
             Args:
-            from_context: If from_context is True (default), the features will be generated from
-                the current context, with the previous built features in client.build(). Otherwise, the features will be generated from
+                from_context:
+                If from_context is True (default), the features will be generated from the current context,
+                with the previous built features in client.build(). Otherwise, the features will be generated from
                 configuration files.
         """
 
         if from_context:
             # make sure those items are in `self`
             if 'anchor_list' in dir(self) and 'derived_feature_list' in dir(self):
-                _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list, self.derived_feature_list, self.local_workspace_dir)
-                self.registry.register_features(self.local_workspace_dir, from_context=from_context, anchor_list=self.anchor_list, derived_feature_list=self.derived_feature_list)
+                _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list,
+                                                                     self.derived_feature_list,
+                                                                     self.local_workspace_dir)
+                self.registry.register_features(self.local_workspace_dir,
+                                                from_context=from_context,
+                                                anchor_list=self.anchor_list,
+                                                derived_feature_list=self.derived_feature_list)
             else:
                 raise RuntimeError("Please call FeathrClient.build_features() first in order to register features")
         else:
@@ -216,8 +235,8 @@ class FeathrClient(object):
         """
         # Run necessary validations
         # anchor name and source name should be unique
-        anchor_names = {}
-        source_names = {}
+        anchor_names = dict()
+        source_names = dict()
         for anchor in anchor_list:
             if anchor.name in anchor_names:
                 raise RuntimeError(f"Anchor name should be unique but there are duplicate anchor names in your anchor "
@@ -332,15 +351,20 @@ class FeathrClient(object):
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'boolean_array':
                     typed_result.append(feature_value.boolean_array.booleans)
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'sparse_string_array':
-                    typed_result.append((feature_value.sparse_string_array.index_integers, feature_value.sparse_string_array.value_strings))
+                    typed_result.append((feature_value.sparse_string_array.index_integers,
+                                         feature_value.sparse_string_array.value_strings))
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'sparse_bool_array':
-                    typed_result.append((feature_value.sparse_bool_array.index_integers, feature_value.sparse_bool_array.value_booleans))
+                    typed_result.append((feature_value.sparse_bool_array.index_integers,
+                                         feature_value.sparse_bool_array.value_booleans))
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'sparse_float_array':
-                    typed_result.append((feature_value.sparse_float_array.index_integers, feature_value.sparse_float_array.value_floats))
+                    typed_result.append((feature_value.sparse_float_array.index_integers,
+                                         feature_value.sparse_float_array.value_floats))
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'sparse_double_array':
-                    typed_result.append((feature_value.sparse_double_array.index_integers, feature_value.sparse_double_array.value_doubles))
+                    typed_result.append((feature_value.sparse_double_array.index_integers,
+                                         feature_value.sparse_double_array.value_doubles))
                 elif feature_value.WhichOneof('FeatureValueOneOf') == 'sparse_long_array':
-                    typed_result.append((feature_value.sparse_long_array.index_integers, feature_value.sparse_long_array.value_longs))
+                    typed_result.append((feature_value.sparse_long_array.index_integers,
+                                         feature_value.sparse_long_array.value_longs))
                 else:
                     self.logger.debug("Fail to load the feature type. Maybe a new type that is not supported by this "
                                       "client version")
@@ -389,21 +413,24 @@ class FeathrClient(object):
         self.logger.info('Redis connection is successful and completed.')
         self.redis_clint = redis_clint
 
-
     def get_offline_features(self,
                              observation_settings: ObservationSettings,
                              feature_query: Union[FeatureQuery, List[FeatureQuery]],
                              output_path: str,
-                             execution_configuratons: Union[SparkExecutionConfiguration ,Dict[str,str]] = None,
-                             udf_files = None,
-                             ):
+                             execution_configuratons: Union[SparkExecutionConfiguration, Dict[str, str]] = None,
+                             udf_files = None):
         """
         Get offline features for the observation dataset
         Args:
             observation_settings: settings of the observation data, e.g. timestamp columns, input path, etc.
             feature_query: features that are requested to add onto the observation data
             output_path: output path of job, i.e. the observation data with features attached.
-            execution_configuratons: a dict that will be passed to spark job when the job starts up, i.e. the "spark configurations". Note that not all of the configuration will be honored since some of the configurations are managed by the Spark platform, such as Databricks or Azure Synapse. Refer to the [spark documentation](https://spark.apache.org/docs/latest/configuration.html) for a complete list of spark configurations.
+            execution_configurations:
+                a dict that will be passed to spark job when the job starts up, i.e. the "spark configurations".
+                Note that not all of the configuration will be honored since some of the configurations
+                are managed by the Spark platform, such as Databricks or Azure Synapse.
+                Refer to the [spark documentation](https://spark.apache.org/docs/latest/configuration.html)
+                for a complete list of spark configurations.
         """
         feature_queries = feature_query if isinstance(feature_query, List) else [feature_query]
         feature_names = []
@@ -423,22 +450,32 @@ class FeathrClient(object):
             ]
             outputPath: "{{output_path}}"
         """)
-        config = tm.render(feature_lists=feature_queries, observation_settings=observation_settings, output_path=output_path)
+        config = tm.render(feature_lists=feature_queries,
+                           observation_settings=observation_settings,
+                           output_path=output_path)
         config_file_name = "feature_join_conf/feature_join.conf"
         config_file_path = os.path.join(self.local_workspace_dir, config_file_name)
 
-        # make sure `FeathrClient.build_features()` is called before getting offline features/materialize features
-        # otherwise users will be confused on what are the available features
-        # in build_features it will assign anchor_list and derived_feature_list variable, hence we are checking if those two variables exist to make sure the above condition is met
+        """
+        Make sure `FeathrClient.build_features()` is called before getting offline features/materialize features
+        otherwise users will be confused on what are the available features in build_features 
+        It will assign anchor_list and derived_feature_list variable, 
+        hence we are checking if those two variables exist to make sure the above condition is met
+        """
         if 'anchor_list' in dir(self) and 'derived_feature_list' in dir(self):
-            _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list, self.derived_feature_list, self.local_workspace_dir)
+            _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list,
+                                                                 self.derived_feature_list,
+                                                                 self.local_workspace_dir)
         else:
             raise RuntimeError("Please call FeathrClient.build_features() first in order to get offline features")
 
         write_to_file(content=config, full_file_name=config_file_path)
         return self._get_offline_features_with_config(config_file_path, execution_configuratons, udf_files=udf_files)
 
-    def _get_offline_features_with_config(self, feature_join_conf_path='feature_join_conf/feature_join.conf', execution_configuratons: Dict[str,str] = None, udf_files=[]):
+    def _get_offline_features_with_config(self,
+                                          feature_join_conf_path='feature_join_conf/feature_join.conf',
+                                          execution_configuratons: Dict[str, str] = None,
+                                          udf_files=[]):
         """Joins the features to your offline observation dataset based on the join config.
 
         Args:
@@ -450,18 +487,28 @@ class FeathrClient(object):
         feature_join_job_params = FeatureJoinJobParams(join_config_path=os.path.abspath(feature_join_conf_path),
                                                        observation_path=feathr_feature['observationPath'],
                                                        feature_config=os.path.join(self.local_workspace_dir, 'feature_conf/'),
-                                                       job_output_path=feathr_feature['outputPath'],
-                                                       )
+                                                       job_output_path=feathr_feature['outputPath'])
+
         job_tags = {OUTPUT_PATH_TAG:feature_join_job_params.job_output_path}
-        # set output format in job tags if it's set by user, so that it can be used to parse the job result in the helper function
+        # set output format in job tags if it's set by user,
+        # so that it can be used to parse the job result in the helper function
         if execution_configuratons is not None and OUTPUT_FORMAT in execution_configuratons:
             job_tags[OUTPUT_FORMAT]= execution_configuratons[OUTPUT_FORMAT]
-        '''
-        - Job tags are for job metadata and it's not passed to the actual spark job (i.e. not visible to spark job), more like a platform related thing that Feathr want to add (currently job tags only have job output URL and job output format, ). They are carried over with the job and is visible to every Feathr client. Think this more like some customized metadata for the job which would be weird to be put in the spark job itself.
-        - Job arguments (or sometimes called job parameters)are the arguments which are command line arguments passed into the actual spark job. This is usually highly related with the spark job. In Feathr it's like the input to the scala spark CLI. They are usually not spark specific (for example if we want to specify the location of the feature files, or want to 
-        - Job configuration are like "configurations" for the spark job and are usually spark specific. For example, we want to control the no. of write parts for spark
-        Job configurations and job arguments (or sometimes called job parameters) have quite some overlaps (i.e. you can achieve the same goal by either using the job arguments/parameters vs. job configurations). But the job tags should just be used for metadata purpose.
-        '''
+
+        """
+        - Job tags are for job metadata and it's not passed to the actual spark job (i.e. not visible to spark job), 
+        more like a platform related thing that Feathr want to add (currently job tags only have job output URL and job output format).
+        They are carried over with the job and is visible to every Feathr client. 
+        Think this more like some customized metadata for the job which would be weird to be put in the spark job itself.
+        - Job arguments (or sometimes called job parameters) are the arguments which are command line arguments passed into the actual spark job. 
+        This is usually highly related with the spark job. In Feathr it's like the input to the scala spark CLI. 
+        They are usually not spark specific (for example if we want to specify the location of the feature files) 
+        - Job configuration are like "configurations" for the spark job and are usually spark specific. 
+        For example, we want to control the number of write parts for spark
+        - Job configurations and job arguments (or sometimes called job parameters) have quite some overlaps 
+        (i.e. you can achieve the same goal by either using the job arguments/parameters vs. job configurations). 
+        But the job tags should just be used for metadata purpose.
+        """
         # submit the jars
         return self.feathr_spark_launcher.submit_feathr_job(
             job_name=self.project_name + '_feathr_feature_join_job',
@@ -512,12 +559,17 @@ class FeathrClient(object):
         else:
             raise RuntimeError('Spark job failed.')
 
-    def materialize_features(self, settings: MaterializationSettings, execution_configuratons: Union[SparkExecutionConfiguration ,Dict[str,str]] = None):
+    def materialize_features(self,
+                             settings: MaterializationSettings,
+                             execution_configuratons: Union[SparkExecutionConfiguration, Dict[str, str]] = None):
         """Materialize feature data
 
         Args:
             settings: Feature materialization settings
-            execution_configuratons: a dict that will be passed to spark job when the job starts up, i.e. the "spark configurations". Note that not all of the configuration will be honored since some of the configurations are managed by the Spark platform, such as Databricks or Azure Synapse. Refer to the [spark documentation](https://spark.apache.org/docs/latest/configuration.html) for a complete list of spark configurations.
+            execution_configuratons: it is a union type, taking either SparkExecutionConfiguration or a pure dict
+            A dict that will be passed to spark job when the job starts up, i.e. the "spark configurations".
+            Note that not all of the configuration will be honored since some of the configurations are managed by the Spark platform, such as Databricks or Azure Synapse.
+            Refer to the [spark documentation](https://spark.apache.org/docs/latest/configuration.html) for a complete list of spark configurations.
         """
         # produce materialization config
 
@@ -530,7 +582,8 @@ class FeathrClient(object):
 
             # make sure `FeathrClient.build_features()` is called before getting offline features/materialize features in the python SDK
             # otherwise users will be confused on what are the available features
-            # in build_features it will assign anchor_list and derived_feature_list variable, hence we are checking if those two variables exist to make sure the above condition is met
+            # in build_features it will assign anchor_list and derived_feature_list variable,
+            # hence we are checking if those two variables exist to make sure the above condition is met
             if 'anchor_list' in dir(self) and 'derived_feature_list' in dir(self):
                 _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list, self.derived_feature_list, self.local_workspace_dir)
             else:
@@ -555,12 +608,19 @@ class FeathrClient(object):
         generation_config = FeatureGenerationJobParams(
             generation_config_path=os.path.abspath(feature_gen_conf_path),
             feature_config=os.path.join(self.local_workspace_dir, "feature_conf/"))
-        '''
-        - Job tags are for job metadata and it's not passed to the actual spark job (i.e. not visible to spark job), more like a platform related thing that Feathr want to add (currently job tags only have job output URL and job output format, ). They are carried over with the job and is visible to every Feathr client. Think this more like some customized metadata for the job which would be weird to be put in the spark job itself.
-        - Job arguments (or sometimes called job parameters)are the arguments which are command line arguments passed into the actual spark job. This is usually highly related with the spark job. In Feathr it's like the input to the scala spark CLI. They are usually not spark specific (for example if we want to specify the location of the feature files, or want to 
-        - Job configuration are like "configurations" for the spark job and are usually spark specific. For example, we want to control the no. of write parts for spark
-        Job configurations and job arguments (or sometimes called job parameters) have quite some overlaps (i.e. you can achieve the same goal by either using the job arguments/parameters vs. job configurations). But the job tags should just be used for metadata purpose.
-        '''
+        """
+        - Job tags are for job metadata and it's not passed to the actual spark job (i.e. not visible to spark job), 
+        more like a platform related thing that Feathr want to add (currently job tags only have job output URL and job output format). 
+        They are carried over with the job and is visible to every Feathr client. 
+        Think this more like some customized metadata for the job which would be weird to be put in the spark job itself.
+        - Job arguments (or sometimes called job parameters)are the arguments which are command line arguments passed into the actual spark job. 
+        This is usually highly related with the spark job. In Feathr it's like the input to the scala spark CLI. 
+        They are usually not spark specific (for example if we want to specify the location of the feature files) 
+        - Job configuration are like "configurations" for the spark job and are usually spark specific. 
+        For example, we want to control the no. of write parts for spark
+        Job configurations and job arguments (or sometimes called job parameters) have quite some overlaps (i.e. you can achieve the same goal by either using the job arguments/parameters vs. job configurations). 
+        But the job tags should just be used for metadata purpose.
+        """
         optional_params = []
         if _EnvVaraibleUtil.get_environment_variable('KAFKA_SASL_JAAS_CONFIG'):
             optional_params = optional_params + ['--kafka-config', self._get_kafka_config_str()]
@@ -585,15 +645,6 @@ class FeathrClient(object):
             reference_files_path=[],
             configuration=execution_configuratons,
         )
-
-
-    def wait_job_to_finish(self, timeout_sec: int = 300):
-        """Waits for the job to finish in a blocking way unless it times out
-        """
-        if self.feathr_spark_launcher.wait_for_completion(timeout_sec):
-            return
-        else:
-            raise RuntimeError('Spark job failed.')
 
     def _getRedisConfigStr(self):
         """Construct the Redis config string. The host, port, credential and other parameters can be set via environment
@@ -655,8 +706,8 @@ class FeathrClient(object):
         return config_str
 
     def _get_sql_config_str(self):
-        """Construct the SQL config string for jdbc. The dbtable (query), user, password and other parameters can be set via
-        environment variables."""
+        """Construct the SQL config string for jdbc. The dbtable (query), user, password and other parameters
+        can be set via environment variables."""
         table = _EnvVaraibleUtil.get_environment_variable('JDBC_TABLE')
         user = _EnvVaraibleUtil.get_environment_variable('JDBC_USER')
         password = _EnvVaraibleUtil.get_environment_variable('JDBC_PASSWORD')
@@ -671,7 +722,12 @@ class FeathrClient(object):
             JDBC_DRIVER: {JDBC_DRIVER}
             JDBC_AUTH_FLAG: {JDBC_AUTH_FLAG}
             JDBC_TOKEN: {JDBC_TOKEN}
-            """.format(JDBC_TABLE=table, JDBC_USER=user, JDBC_PASSWORD=password, JDBC_DRIVER = driver, JDBC_AUTH_FLAG = auth_flag, JDBC_TOKEN = token)
+            """.format(JDBC_TABLE=table,
+                       JDBC_USER=user,
+                       JDBC_PASSWORD=password,
+                       JDBC_DRIVER=driver,
+                       JDBC_AUTH_FLAG=auth_flag,
+                       JDBC_TOKEN=token)
         return config_str
 
     def _get_snowflake_config_str(self):
