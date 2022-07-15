@@ -272,7 +272,8 @@ def main():
                                                    transform="feature_user_gift_card_balance + if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
 
     # build features in client
-    client.build_features(anchor_list=[anchored_features, agg_anchored_features])
+    client.build_features(anchor_list=[anchored_features, agg_anchored_features],
+                          derived_feature_list=[feature_user_purchasing_power])
 
     if client.spark_runtime == 'databricks':
         output_path = 'dbfs:/feathrazure_test.avro'
@@ -283,7 +284,8 @@ def main():
                                                "feature_user_tax_rate",
                                                "feature_user_gift_card_balance",
                                                "feature_user_has_valid_credit_card",
-                                               "feature_user_total_purchase_in_90days"],
+                                               "feature_user_total_purchase_in_90days",
+                                               "feature_user_purchasing_power"],
                                  key=user_id)
 
     settings = ObservationSettings(observation_path=user_observation_wasbs,
