@@ -1,31 +1,53 @@
 import os
-import glob
-import tempfile
-import pandas as pd
-import pandavro as pdx
-from datetime import datetime, timedelta
 
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import train_test_split
+import pandas as pd
+
+from feathr import FeathrClient
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
 
-from feathr import FeathrClient, FeatureQuery, ObservationSettings
-from feathr import Feature, DerivedFeature, FeatureAnchor
-from feathr import BackfillTime, MaterializationSettings
-from feathr import BOOLEAN, FLOAT, INT32, ValueType
-from feathr import INPUT_CONTEXT, HdfsSource
-from feathr import WindowAggTransformation
-from feathr import TypedKey
-from feathr import RedisSink, HdfsSink
-from feathr.job_utils import get_result_df
+def config_credentials():
+    # resource prefix
+    resource_prefix = "feathrpqoplus"
+
+    # Get all the required credentials from Azure Key Vault
+    key_vault_name = resource_prefix + "kv"
+    synapse_workspace_url = resource_prefix + "syws"
+    adls_account = resource_prefix + "dls"
+    adls_fs_name = resource_prefix + "fs"
+    purview_name = resource_prefix + "purview"
+    key_vault_uri = f"https://{key_vault_name}.vault.azure.net"
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
+    client = SecretClient(vault_url=key_vault_uri, credential=credential)
+    secretName = "FEATHR-ONLINE-STORE-CONN"
+    retrieved_secret = client.get_secret(secretName).value
+
+    # Get redis credentials; This is to parse Redis connection string.
+    redis_port = retrieved_secret.split(',')[0].split(":")[1]
+    redis_host = retrieved_secret.split(',')[0].split(":")[0]
+    redis_password = retrieved_secret.split(',')[1].split("password=", 1)[1]
+    redis_ssl = retrieved_secret.split(',')[2].split("ssl=", 1)[1]
+
+    # Set the resource link
+    os.environ['spark_config__azure_synapse__dev_url'] = f'https://{synapse_workspace_url}.dev.azuresynapse.net'
+    os.environ['spark_config__azure_synapse__pool_name'] = 'spark31'
+    os.environ[
+        'spark_config__azure_synapse__workspace_dir'] = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_project'
+    os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
+    os.environ['online_store__redis__host'] = redis_host
+    os.environ['online_store__redis__port'] = redis_port
+    os.environ['online_store__redis__ssl_enabled'] = redis_ssl
+    os.environ['REDIS_PASSWORD'] = redis_password
+    os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
+    feathr_output_path = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_output'
+
+    return feathr_output_path
 
 
 def config_runtime():
+    import tempfile
     yaml_config = """
     # Please refer to https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml for explanations on the meaning of each field.
     api_version: 1
@@ -85,243 +107,38 @@ def config_runtime():
     return tmp
 
 
-def config_feathr():
-    #############################
-    # Prerequisite Configuration
-    #############################
-    # resource prefix
-    resource_prefix = "feathrpqoplus"
-
-    # Get all the required credentials from Azure Key Vault
-    key_vault_name = resource_prefix + "kv"
-    synapse_workspace_url = resource_prefix + "syws"
-    adls_account = resource_prefix + "dls"
-    adls_fs_name = resource_prefix + "fs"
-    purview_name = resource_prefix + "purview"
-    key_vault_uri = f"https://{key_vault_name}.vault.azure.net"
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
-    client = SecretClient(vault_url=key_vault_uri, credential=credential)
-    secretName = "FEATHR-ONLINE-STORE-CONN"
-    retrieved_secret = client.get_secret(secretName).value
-
-    # Get redis credentials; This is to parse Redis connection string.
-    redis_port = retrieved_secret.split(',')[0].split(":")[1]
-    redis_host = retrieved_secret.split(',')[0].split(":")[0]
-    redis_password = retrieved_secret.split(',')[1].split("password=", 1)[1]
-    redis_ssl = retrieved_secret.split(',')[2].split("ssl=", 1)[1]
-
-    # Set the resource link
-    os.environ['spark_config__azure_synapse__dev_url'] = f'https://{synapse_workspace_url}.dev.azuresynapse.net'
-    os.environ['spark_config__azure_synapse__pool_name'] = 'spark31'
-    os.environ[
-        'spark_config__azure_synapse__workspace_dir'] = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_project'
-    os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
-    os.environ['online_store__redis__host'] = redis_host
-    os.environ['online_store__redis__port'] = redis_port
-    os.environ['online_store__redis__ssl_enabled'] = redis_ssl
-    os.environ['REDIS_PASSWORD'] = redis_password
-    os.environ['feature_registry__purview__purview_name'] = f'{purview_name}'
-    feathr_output_path = f'abfss://{adls_fs_name}@{adls_account}.dfs.core.windows.net/feathr_output'
-
-    return feathr_output_path
-
-
-def feathr_udf_day_calc(df: DataFrame) -> DataFrame:
-    df = df.withColumn("fare_amount_cents", col("fare_amount")*100)
-    return df
-
-
-def build_data_source(data_path):
-    batch_source = HdfsSource(name="nycTaxiBatchSource",
-                              path=data_path,
-                              event_timestamp_column="lpep_dropoff_datetime",
-                              preprocessing=feathr_udf_day_calc,
-                              timestamp_format="yyyy-MM-dd HH:mm:ss")
-
-    return batch_source
-
-
-def build_features(data_source):
-    ##############################
-    # define anchored feature
-    ##############################
-    f_trip_distance = Feature(name="f_trip_distance",
-                              feature_type=FLOAT,
-                              transform="trip_distance")
-    print("#### build feature f_trip_distance ####")
-
-    f_trip_time_duration = Feature(name="f_trip_time_duration",
-                                   feature_type=INT32,
-                                   transform="(to_unix_timestamp(lpep_dropoff_datetime) - to_unix_timestamp(lpep_pickup_datetime))/60")
-    print("#### build feature f_trip_time_duration ####")
-
-    f_is_long_trip_distance = Feature(name="f_is_long_trip_distance",
-                                      feature_type=BOOLEAN,
-                                      transform="cast_float(trip_distance)>30")
-    print("#### build feature f_is_long_trip_distance ####")
-
-    f_day_of_week = Feature(name="f_day_of_week",
-                            feature_type=INT32,
-                            transform="dayofweek(lpep_dropoff_datetime)")
-    print("#### build feature f_day_of_week ####")
-
-    features = [
-        f_trip_distance,
-        f_trip_time_duration,
-        f_is_long_trip_distance,
-        f_day_of_week
-    ]
-
-    request_anchor = FeatureAnchor(name="request_features",
-                                   source=INPUT_CONTEXT,
-                                   features=features)
-
-    ################################################
-    # define anchored (aggregated) feature
-    ################################################
-    location_id = TypedKey(key_column="DOLocationID",
-                           key_column_type=ValueType.INT32,
-                           description="location id in NYC",
-                           full_name="nyc_taxi.location_id")
-
-    f_location_avg_fare = Feature(name="f_location_avg_fare",
-                                  key=location_id,
-                                  feature_type=FLOAT,
-                                  transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
-                                                                    agg_func="AVG",
-                                                                    window="90d"))
-    print("#### build feature f_location_avg_fare ####")
-
-    f_location_max_fare = Feature(name="f_location_max_fare",
-                                  key=location_id,
-                                  feature_type=FLOAT,
-                                  transform=WindowAggTransformation(agg_expr="cast_float(fare_amount)",
-                                                                    agg_func="MAX",
-                                                                    window="90d"))
-    print("#### build feature f_location_max_fare ####")
-
-    f_location_total_fare_cents = Feature(name="f_location_total_fare_cents",
-                                          key=location_id,
-                                          feature_type=FLOAT,
-                                          transform=WindowAggTransformation(agg_expr="fare_amount_cents",
-                                                                            agg_func="SUM",
-                                                                            window="90d"))
-    print("#### build feature f_location_total_fare_cents ####")
-
-    agg_features = [
-        f_location_avg_fare,
-        f_location_max_fare,
-        f_location_total_fare_cents
-    ]
-
-    agg_anchor = FeatureAnchor(name="aggregationFeatures",
-                               source=data_source,
-                               features=agg_features)
-
-    ##############################
-    # define DerivedFeature
-    ##############################
-    f_trip_time_distance = DerivedFeature(name="f_trip_time_distance",
-                                          feature_type=FLOAT,
-                                          input_features=[f_trip_distance, f_trip_time_duration],
-                                          transform="f_trip_distance * f_trip_time_duration")
-    print("#### build feature f_trip_time_distance ####")
-
-    f_trip_time_rounded = DerivedFeature(name="f_trip_time_rounded",
-                                         feature_type=INT32,
-                                         input_features=[f_trip_time_duration],
-                                         transform="f_trip_time_duration % 10")
-    print("#### build feature f_trip_time_rounded ####")
-
-    anchored_feature_dict = dict()
-    anchored_feature_dict["request_anchor"] = request_anchor
-    anchored_feature_dict["agg_anchor"] = agg_anchor
-
-    derived_feature_dict = dict()
-    derived_feature_dict["f_trip_time_distance"] = f_trip_time_distance
-    derived_feature_dict["f_trip_time_rounded"] = f_trip_time_rounded
-
-    key_dict = dict()
-    key_dict["location_id"] = location_id
-
-    return anchored_feature_dict, derived_feature_dict, key_dict
-
-
-def download_result_df(client: FeathrClient) -> pd.DataFrame:
-    """Download the job result dataset from cloud as a Pandas dataframe."""
-    res_url = client.get_job_result_uri(block=True, timeout_sec=600)
-    tmp_dir = tempfile.TemporaryDirectory()
-    client.feathr_spark_launcher.download_result(result_path=res_url, local_folder=tmp_dir.name)
-    dataframe_list = []
-    # assuming the result are in avro format
-    for file in glob.glob(os.path.join(tmp_dir.name, '*.avro')):
-        dataframe_list.append(pdx.read_avro(file))
-    vertical_concat_df = pd.concat(dataframe_list, axis=0)
-    tmp_dir.cleanup()
-    return vertical_concat_df
-
-
-def dataset_preparation(dataframe_result):
-    final_df = dataframe_result
-    final_df.drop(["lpep_pickup_datetime", "lpep_dropoff_datetime",
-                   "store_and_fwd_flag"], axis=1, inplace=True, errors='ignore')
-    final_df.fillna(0, inplace=True)
-    final_df['fare_amount'] = final_df['fare_amount'].astype("float64")
-
-    train_x, test_x, train_y, test_y = train_test_split(final_df.drop(["fare_amount"], axis=1),
-                                                        final_df["fare_amount"],
-                                                        test_size=0.2,
-                                                        random_state=42)
-
-    return train_x, test_x, train_y, test_y
-
-
 def main():
     print("########################### \n## Config Feathr \n###########################")
-    feathr_output = config_feathr()
+    feathr_output = config_credentials()
     feathr_runtime_config = config_runtime()
 
     # create feathr client
     client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
 
-    # build data source
-    wasbs_path = "wasbs://public@azurefeathrstorage.blob.core.windows.net/sample_data/green_tripdata_2020-04_with_index.csv"
-    batch_source = build_data_source(wasbs_path)
+    # path of observation dataset (aka label dataset)
+    user_observation_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
+                                       "public/sample_data/product_recommendation_sample/"
+                                       "user_observation_mock_data.csv")
 
-    print("########################### \n## Build Features \n###########################")
-    anchored_feature_dict, derived_feature_dict, key_dict = build_features(batch_source)
+    # path of user profile dataset (dataset used to generate user features)
+    user_profile_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
+                                   "public/sample_data/product_recommendation_sample/"
+                                   "user_profile_mock_data.csv")
 
-    # build features
-    client.build_features(anchor_list=[anchored_feature_dict["agg_anchor"],
-                                       anchored_feature_dict["request_anchor"]],
-                          derived_feature_list=[derived_feature_dict["f_trip_time_distance"],
-                                                derived_feature_dict["f_trip_time_rounded"]])
+    # path of purchase history dataset (dataset used to generate user features)
+    # This is activity data, so we need to use aggregation to generation features
+    user_purchase_history_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
+                                            "public/sample_data/product_recommendation_sample/"
+                                            "user_purchase_history_mock_data.csv")
 
-    # config output path
-    if client.spark_runtime == 'databricks':
-        output_path = 'dbfs:/feathrazure_test.avro'
-    else:
-        output_path = feathr_output
+    user_observation_mock_data = pd.read_csv(user_observation_mock_data_path)
+    user_profile_mock_data = pd.read_csv(user_profile_mock_data_path)
+    user_purchase_history_mock_data = pd.read_csv(user_purchase_history_mock_data_path)
 
-    print("########################### \n## Generate Features \n###########################")
-    feature_query = FeatureQuery(feature_list=["f_location_avg_fare",
-                                               "f_trip_time_rounded",
-                                               "f_is_long_trip_distance",
-                                               "f_location_total_fare_cents"],
-                                 key=key_dict["location_id"])
-
-    settings = ObservationSettings(observation_path=wasbs_path,
-                                   event_timestamp_column="lpep_dropoff_datetime",
-                                   timestamp_format="yyyy-MM-dd HH:mm:ss")
-
-    client.get_offline_features(observation_settings=settings,
-                                feature_query=feature_query,
-                                output_path=output_path)
-    client.wait_job_to_finish(timeout_sec=500)
-
-    df_res = download_result_df(client)
-    print("Data after PIT: {}".format(df_res))
-
+    user_observation_mock_data.to_csv("user_observation_mock_data.csv")
+    user_profile_mock_data.to_csv("user_profile_mock_data.csv")
+    user_purchase_history_mock_data.to_csv("user_profile_mock_data.csv")
+    
 
 if __name__ == "__main__":
     main()
