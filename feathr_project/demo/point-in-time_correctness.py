@@ -2,10 +2,17 @@ import os
 
 import pandas as pd
 
-from feathr import FeathrClient
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import col
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+
+from feathr import FeathrClient
+from feathr import TypedKey
+from feathr import BOOLEAN, FLOAT, INT32, ValueType
+from feathr import Feature, DerivedFeature, FeatureAnchor
+from feathr import INPUT_CONTEXT, HdfsSource
 
 
 def config_credentials():
@@ -107,6 +114,12 @@ def config_runtime():
     return tmp
 
 
+def feathr_udf_preprocessing(df: DataFrame) -> DataFrame:
+    df = df.withColumn("tax_rate_decimal", col("tax_rate")/100)
+    df.show(10)
+    return df
+
+
 def main():
     print("########################### \n## Config Feathr \n###########################")
     feathr_output = config_credentials()
@@ -130,15 +143,42 @@ def main():
     user_purchase_history_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
                                             "public/sample_data/product_recommendation_sample/"
                                             "user_purchase_history_mock_data.csv")
-
+    '''
     user_observation_mock_data = pd.read_csv(user_observation_mock_data_path)
     user_profile_mock_data = pd.read_csv(user_profile_mock_data_path)
     user_purchase_history_mock_data = pd.read_csv(user_purchase_history_mock_data_path)
 
     user_observation_mock_data.to_csv("user_observation_mock_data.csv")
     user_profile_mock_data.to_csv("user_profile_mock_data.csv")
-    user_purchase_history_mock_data.to_csv("user_profile_mock_data.csv")
-    
+    user_purchase_history_mock_data.to_csv("user_purchase_history_mock_data.csv")
+    '''
+
+    user_id = TypedKey(key_column="user_id",
+                       key_column_type=ValueType.INT32,
+                       description="user id",
+                       full_name="product_recommendation.user_id")
+
+    feature_user_age = Feature(name="feature_user_age",
+                               key=user_id,
+                               feature_type=INT32, transform="age")
+
+    feature_user_tax_rate = Feature(name="feature_user_tax_rate",
+                                    key=user_id,
+                                    feature_type=FLOAT,
+                                    transform="tax_rate_decimal")
+
+    features = [feature_user_age, feature_user_tax_rate]
+
+    batch_source = HdfsSource(name="userProfileData",
+                              path=user_profile_mock_data_path,
+                              preprocessing=feathr_udf_preprocessing)
+
+    request_anchor = FeatureAnchor(name="anchored_features",
+                                   source=batch_source,
+                                   features=features)
+
+    client.build_features(anchor_list=[request_anchor])
+
 
 if __name__ == "__main__":
     main()
