@@ -15,6 +15,7 @@ from feathr import TypedKey
 from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import INPUT_CONTEXT, HdfsSource
+from feathr import WindowAggTransformation
 
 
 def config_credentials():
@@ -136,15 +137,7 @@ def feathr_udf_preprocessing(df: DataFrame) -> DataFrame:
     return df
 
 
-def main():
-    print("########################### \n## Config Feathr \n###########################")
-    feathr_output = config_credentials()
-    feathr_runtime_config = config_runtime()
-
-    # create feathr client
-    client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
-
-    '''
+def show_all_datasets():
     # path of observation dataset (aka label dataset)
     user_observation_afs = ("https://azurefeathrstorage.blob.core.windows.net/"
                             "public/sample_data/product_recommendation_sample/"
@@ -161,14 +154,35 @@ def main():
                                  "public/sample_data/product_recommendation_sample/"
                                  "user_purchase_history_mock_data.csv")
 
-    user_observation_mock_data = pd.read_csv(user_observation_mock_data_path)
-    user_profile_mock_data = pd.read_csv(user_profile_mock_data_path)
-    user_purchase_history_mock_data = pd.read_csv(user_purchase_history_mock_data_path)
+    user_observation_mock_data = pd.read_csv(user_observation_afs)
+    user_profile_mock_data = pd.read_csv(user_profile_afs)
+    user_purchase_history_mock_data = pd.read_csv(user_purchase_history_afs)
 
+    # save dataset to local csv files
     user_observation_mock_data.to_csv("user_observation_mock_data.csv")
     user_profile_mock_data.to_csv("user_profile_mock_data.csv")
     user_purchase_history_mock_data.to_csv("user_purchase_history_mock_data.csv")
-    '''
+
+    print("### User Observation Dataset ###")
+    print(user_observation_afs)
+
+    print("### User Profile Dataset ###")
+    print(user_profile_afs)
+
+    print("### User Purchase_history ###")
+    print(user_purchase_history_afs)
+
+
+def main():
+    print("########################### \n## Config Feathr \n###########################")
+    feathr_output = config_credentials()
+    feathr_runtime_config = config_runtime()
+
+    # create feathr client
+    client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
+
+    # show all the dataset and save them to local csv files
+    # show_all_datasets()
 
     user_observation_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
                               "sample_data/product_recommendation_sample/"
@@ -177,6 +191,10 @@ def main():
     user_profile_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
                           "sample_data/product_recommendation_sample/"
                           "user_profile_mock_data.csv")
+
+    user_purchase_history_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
+                                   "sample_data/product_recommendation_sample/"
+                                   "user_purchase_history_mock_data.csv")
 
     user_id = TypedKey(key_column="user_id",
                        key_column_type=ValueType.INT32,
@@ -192,17 +210,32 @@ def main():
                                     feature_type=FLOAT,
                                     transform="tax_rate_decimal")
 
-    features = [feature_user_age, feature_user_tax_rate]
+    user_profile_source = HdfsSource(name="user_profile_data",
+                                     path=user_profile_wasbs,
+                                     preprocessing=feathr_udf_preprocessing)
 
-    batch_source = HdfsSource(name="userProfileData",
-                              path=user_profile_wasbs,
-                              preprocessing=feathr_udf_preprocessing)
+    anchored_features = FeatureAnchor(name="anchored_features",
+                                      source=user_profile_source,
+                                      features=[feature_user_age,
+                                                feature_user_tax_rate])
 
-    request_anchor = FeatureAnchor(name="anchored_features",
-                                   source=batch_source,
-                                   features=features)
+    agg_feature_user_purchase_90d = Feature(name="feature_user_total_purchase_in_90days",
+                                            key=user_id,
+                                            feature_type=FLOAT,
+                                            transform=WindowAggTransformation(agg_expr="cast_float(purchase_amount)",
+                                                                              agg_func="AVG",
+                                                                              window="90d"))
 
-    client.build_features(anchor_list=[request_anchor])
+    purchase_history_source = HdfsSource(name="purchase_history_data",
+                                         path=user_purchase_history_wasbs,
+                                         event_timestamp_column="purchase_date",
+                                         timestamp_format="yyyy-MM-dd")
+
+    agg_anchored_features = FeatureAnchor(name="aggregation_anchored_features",
+                                          source=purchase_history_source,
+                                          features=[agg_feature_user_purchase_90d])
+
+    client.build_features(anchor_list=[anchored_features, agg_anchored_features])
 
     if client.spark_runtime == 'databricks':
         output_path = 'dbfs:/feathrazure_test.avro'
@@ -210,7 +243,8 @@ def main():
         output_path = feathr_output
 
     feature_query = FeatureQuery(feature_list=["feature_user_age",
-                                               "feature_user_tax_rate"],
+                                               "feature_user_tax_rate",
+                                               "feature_user_total_purchase_in_90days"],
                                  key=user_id)
 
     settings = ObservationSettings(observation_path=user_observation_wasbs)
@@ -223,7 +257,7 @@ def main():
     df_res = get_result_df(client)
     print("Generated Features from Offline Store:")
     print(df_res)
-    df_res.to_csv("test_feature.csv")
+    df_res.to_csv("join_age_taxrate_totalpurchase.csv")
 
 
 if __name__ == "__main__":
