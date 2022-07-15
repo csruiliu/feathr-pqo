@@ -1,6 +1,8 @@
 import os
 import glob
+import tempfile
 import pandas as pd
+import pandavro as pdx
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col
@@ -142,22 +144,23 @@ def main():
     # create feathr client
     client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
 
+    '''
     # path of observation dataset (aka label dataset)
-    user_observation_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
-                                       "public/sample_data/product_recommendation_sample/"
-                                       "user_observation_mock_data.csv")
+    user_observation_afs = ("https://azurefeathrstorage.blob.core.windows.net/"
+                            "public/sample_data/product_recommendation_sample/"
+                            "user_observation_mock_data.csv")
 
     # path of user profile dataset (dataset used to generate user features)
-    user_profile_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
-                                   "public/sample_data/product_recommendation_sample/"
-                                   "user_profile_mock_data.csv")
+    user_profile_afs = ("https://azurefeathrstorage.blob.core.windows.net/"
+                        "public/sample_data/product_recommendation_sample/"
+                        "user_profile_mock_data.csv")
 
     # path of purchase history dataset (dataset used to generate user features)
     # This is activity data, so we need to use aggregation to generation features
-    user_purchase_history_mock_data_path = ("https://azurefeathrstorage.blob.core.windows.net/"
-                                            "public/sample_data/product_recommendation_sample/"
-                                            "user_purchase_history_mock_data.csv")
-    '''
+    user_purchase_history_afs = ("https://azurefeathrstorage.blob.core.windows.net/"
+                                 "public/sample_data/product_recommendation_sample/"
+                                 "user_purchase_history_mock_data.csv")
+
     user_observation_mock_data = pd.read_csv(user_observation_mock_data_path)
     user_profile_mock_data = pd.read_csv(user_profile_mock_data_path)
     user_purchase_history_mock_data = pd.read_csv(user_purchase_history_mock_data_path)
@@ -166,6 +169,14 @@ def main():
     user_profile_mock_data.to_csv("user_profile_mock_data.csv")
     user_purchase_history_mock_data.to_csv("user_purchase_history_mock_data.csv")
     '''
+
+    user_observation_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
+                              "sample_data/product_recommendation_sample/"
+                              "user_observation_mock_data.csv")
+
+    user_profile_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
+                          "sample_data/product_recommendation_sample/"
+                          "user_profile_mock_data.csv")
 
     user_id = TypedKey(key_column="user_id",
                        key_column_type=ValueType.INT32,
@@ -184,7 +195,7 @@ def main():
     features = [feature_user_age, feature_user_tax_rate]
 
     batch_source = HdfsSource(name="userProfileData",
-                              path=user_profile_mock_data_path,
+                              path=user_profile_wasbs,
                               preprocessing=feathr_udf_preprocessing)
 
     request_anchor = FeatureAnchor(name="anchored_features",
@@ -201,7 +212,9 @@ def main():
     feature_query = FeatureQuery(feature_list=["feature_user_age",
                                                "feature_user_tax_rate"],
                                  key=user_id)
-    settings = ObservationSettings(observation_path=user_profile_mock_data_path)
+
+    settings = ObservationSettings(observation_path=user_observation_wasbs)
+
     client.get_offline_features(observation_settings=settings,
                                 feature_query=feature_query,
                                 output_path=output_path)
