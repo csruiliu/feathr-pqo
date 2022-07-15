@@ -8,7 +8,7 @@ from pyspark.sql.functions import col
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-from feathr import FeathrClient
+from feathr import FeathrClient, FeatureQuery, ObservationSettings
 from feathr import TypedKey
 from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
@@ -178,6 +178,24 @@ def main():
                                    features=features)
 
     client.build_features(anchor_list=[request_anchor])
+
+    if client.spark_runtime == 'databricks':
+        output_path = 'dbfs:/feathrazure_test.avro'
+    else:
+        output_path = feathr_output
+
+    feature_query = FeatureQuery(
+        feature_list=["feature_user_age",
+                      "feature_user_tax_rate",
+                      "feature_user_gift_card_balance",
+                      "feature_user_has_valid_credit_card",
+                      "feature_user_total_purchase_in_90days",
+                      "feature_user_purchasing_power"], key=user_id)
+    settings = ObservationSettings(observation_path=user_profile_mock_data_path)
+    client.get_offline_features(observation_settings=settings,
+                                feature_query=feature_query,
+                                output_path=output_path)
+    client.wait_job_to_finish(timeout_sec=500)
 
 
 if __name__ == "__main__":
