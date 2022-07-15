@@ -184,6 +184,9 @@ def main():
     # show all the dataset and save them to local csv files
     # show_all_datasets()
 
+    ####################
+    # datasets path
+    ####################
     user_observation_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
                               "sample_data/product_recommendation_sample/"
                               "user_observation_mock_data.csv")
@@ -196,11 +199,15 @@ def main():
                                    "sample_data/product_recommendation_sample/"
                                    "user_purchase_history_mock_data.csv")
 
+    # define primary key
     user_id = TypedKey(key_column="user_id",
                        key_column_type=ValueType.INT32,
                        description="user id",
                        full_name="product_recommendation.user_id")
 
+    ######################
+    # define anchored key
+    ######################
     feature_user_age = Feature(name="feature_user_age",
                                key=user_id,
                                feature_type=INT32, transform="age")
@@ -210,6 +217,16 @@ def main():
                                     feature_type=FLOAT,
                                     transform="tax_rate_decimal")
 
+    feature_user_gift_card_balance = Feature(name="feature_user_gift_card_balance",
+                                             key=user_id,
+                                             feature_type=FLOAT,
+                                             transform="gift_card_balance")
+
+    feature_user_has_valid_credit_card = Feature(name="feature_user_has_valid_credit_card",
+                                                 key=user_id,
+                                                 feature_type=BOOLEAN,
+                                                 transform="number_of_credit_cards > 0")
+
     user_profile_source = HdfsSource(name="user_profile_data",
                                      path=user_profile_wasbs,
                                      preprocessing=feathr_udf_preprocessing)
@@ -217,15 +234,23 @@ def main():
     anchored_features = FeatureAnchor(name="anchored_features",
                                       source=user_profile_source,
                                       features=[feature_user_age,
-                                                feature_user_tax_rate])
+                                                feature_user_tax_rate,
+                                                feature_user_gift_card_balance,
+                                                feature_user_has_valid_credit_card])
 
+    #################################
+    # define aggregated anchored key
+    #################################
+    # this time window is based on the event_timestamp_column in observation dataset
+    # i.e., time travel back "window" period from the time of event_timestamp_column
     agg_feature_user_purchase_90d = Feature(name="feature_user_total_purchase_in_90days",
                                             key=user_id,
                                             feature_type=FLOAT,
                                             transform=WindowAggTransformation(agg_expr="cast_float(purchase_amount)",
-                                                                              agg_func="AVG",
+                                                                              agg_func="SUM",
                                                                               window="90d"))
 
+    # we need event_timestamp_column since we need to decide if the purchase happens within the "time window"
     purchase_history_source = HdfsSource(name="purchase_history_data",
                                          path=user_purchase_history_wasbs,
                                          event_timestamp_column="purchase_date",
@@ -235,6 +260,18 @@ def main():
                                           source=purchase_history_source,
                                           features=[agg_feature_user_purchase_90d])
 
+    #####################
+    # define derived key
+    #####################
+
+    feature_user_purchasing_power = DerivedFeature(name="feature_user_purchasing_power",
+                                                   key=user_id,
+                                                   feature_type=FLOAT,
+                                                   input_features=[feature_user_gift_card_balance,
+                                                                   feature_user_has_valid_credit_card],
+                                                   transform="feature_user_gift_card_balance + if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
+
+    # build features in client
     client.build_features(anchor_list=[anchored_features, agg_anchored_features])
 
     if client.spark_runtime == 'databricks':
@@ -244,10 +281,14 @@ def main():
 
     feature_query = FeatureQuery(feature_list=["feature_user_age",
                                                "feature_user_tax_rate",
+                                               "feature_user_gift_card_balance",
+                                               "feature_user_has_valid_credit_card",
                                                "feature_user_total_purchase_in_90days"],
                                  key=user_id)
 
-    settings = ObservationSettings(observation_path=user_observation_wasbs)
+    settings = ObservationSettings(observation_path=user_observation_wasbs,
+                                   event_timestamp_column="event_timestamp",
+                                   timestamp_format="yyyy-MM-dd")
 
     client.get_offline_features(observation_settings=settings,
                                 feature_query=feature_query,
@@ -257,7 +298,7 @@ def main():
     df_res = get_result_df(client)
     print("Generated Features from Offline Store:")
     print(df_res)
-    df_res.to_csv("join_age_taxrate_totalpurchase.csv")
+    df_res.to_csv("join_all.csv")
 
 
 if __name__ == "__main__":
