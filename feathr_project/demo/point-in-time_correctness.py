@@ -1,5 +1,5 @@
 import os
-
+import glob
 import pandas as pd
 
 from pyspark.sql import SparkSession, DataFrame
@@ -114,6 +114,20 @@ def config_runtime():
     return tmp
 
 
+def get_result_df(client: FeathrClient) -> pd.DataFrame:
+    """Download the job result dataset from cloud as a Pandas dataframe."""
+    res_url = client.get_job_result_uri(block=True, timeout_sec=600)
+    tmp_dir = tempfile.TemporaryDirectory()
+    client.feathr_spark_launcher.download_result(result_path=res_url, local_folder=tmp_dir.name)
+    dataframe_list = []
+    # assuming the result are in avro format
+    for file in glob.glob(os.path.join(tmp_dir.name, '*.avro')):
+        dataframe_list.append(pdx.read_avro(file))
+    vertical_concat_df = pd.concat(dataframe_list, axis=0)
+    tmp_dir.cleanup()
+    return vertical_concat_df
+
+
 def feathr_udf_preprocessing(df: DataFrame) -> DataFrame:
     df = df.withColumn("tax_rate_decimal", col("tax_rate")/100)
     df.show(10)
@@ -184,18 +198,19 @@ def main():
     else:
         output_path = feathr_output
 
-    feature_query = FeatureQuery(
-        feature_list=["feature_user_age",
-                      "feature_user_tax_rate",
-                      "feature_user_gift_card_balance",
-                      "feature_user_has_valid_credit_card",
-                      "feature_user_total_purchase_in_90days",
-                      "feature_user_purchasing_power"], key=user_id)
+    feature_query = FeatureQuery(feature_list=["feature_user_age",
+                                               "feature_user_tax_rate"],
+                                 key=user_id)
     settings = ObservationSettings(observation_path=user_profile_mock_data_path)
     client.get_offline_features(observation_settings=settings,
                                 feature_query=feature_query,
                                 output_path=output_path)
     client.wait_job_to_finish(timeout_sec=500)
+
+    df_res = get_result_df(client)
+    print("Generated Features from Offline Store:")
+    print(df_res)
+    df_res.to_csv("test_feature.csv")
 
 
 if __name__ == "__main__":
