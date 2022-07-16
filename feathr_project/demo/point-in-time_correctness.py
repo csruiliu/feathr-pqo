@@ -4,7 +4,7 @@ import tempfile
 import pandas as pd
 import pandavro as pdx
 
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import DataFrame
 from pyspark.sql.functions import col
 
 from azure.identity import DefaultAzureCredential
@@ -14,8 +14,10 @@ from feathr import FeathrClient, FeatureQuery, ObservationSettings
 from feathr import TypedKey
 from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
-from feathr import INPUT_CONTEXT, HdfsSource
+from feathr import HdfsSource
 from feathr import WindowAggTransformation
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
 
 
 def config_credentials():
@@ -301,6 +303,26 @@ def main():
     print("Generated Features from Offline Store:")
     print(df_res)
     df_res.to_csv("join_all.csv")
+
+    #################################
+    # Train a machine learning model
+    #################################
+    final_df = df_res
+    final_df.drop(["event_timestamp"], axis=1, inplace=True, errors='ignore')
+    final_df.fillna(0, inplace=True)
+    final_df['product_rating'] = final_df['product_rating'].astype("float64")
+
+    final_df.to_csv("train_dataset.csv")
+
+    train_x, test_x, train_y, test_y = train_test_split(final_df.drop(["product_rating"], axis=1),
+                                                        final_df["product_rating"],
+                                                        test_size=0.2,
+                                                        random_state=42)
+
+    print("## Train X: ## \n{}".format(train_x))
+    print("## Train Y: ## \n{}".format(train_y))
+    print("## Test X: ## \n{}".format(test_x))
+    print("## Test Y: ## \n{}".format(test_y))
 
 
 if __name__ == "__main__":
