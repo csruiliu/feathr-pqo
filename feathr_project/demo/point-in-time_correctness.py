@@ -20,8 +20,9 @@ from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import HdfsSource
 from feathr import WindowAggTransformation
-from feathr import RedisSink
+from feathr import RedisSink, HdfsSink
 from feathr import BackfillTime, MaterializationSettings
+from feathr.job_utils import get_result_df
 
 
 def config_credentials():
@@ -123,7 +124,7 @@ def config_runtime():
     return tmp
 
 
-def get_result_df(client: FeathrClient) -> pd.DataFrame:
+def download_result_df(client: FeathrClient) -> pd.DataFrame:
     """Download the job result dataset from cloud as a Pandas dataframe."""
     res_url = client.get_job_result_uri(block=True, timeout_sec=600)
     tmp_dir = tempfile.TemporaryDirectory()
@@ -303,10 +304,10 @@ def main():
                                 output_path=output_path)
     client.wait_job_to_finish(timeout_sec=500)
 
-    df_res = get_result_df(client)
-    print("Generated Features from Offline Store:")
-    print(df_res)
-    df_res.to_csv("join_all.csv")
+    df_res = download_result_df(client)
+    # print("Generated Features from Offline Store:")
+    # print(df_res)
+    # df_res.to_csv("join_all.csv")
 
     #################################
     # Train a machine learning model
@@ -345,25 +346,54 @@ def main():
     print("Model MAPE: \n{}".format(mean_abs_percent_error))
     print("Model Accuracy: \n{}".format(1 - mean_abs_percent_error))
 
+    """
     #################################
-    # Materialization
+    # Online Materialization
     #################################
     backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 23), step=timedelta(days=1))
     redisSink = RedisSink(table_name="productRecommendationDemoFeature")
     settings = MaterializationSettings(name="productRecommendationFeatureSetting",
                                        backfill_time=backfill_time,
                                        sinks=[redisSink],
-                                       feature_names=["feature_user_age", "feature_user_gift_card_balance"])
+                                       feature_names=["feature_user_age", "feature_user_purchasing_power"])
 
     client.materialize_features(settings)
     client.wait_job_to_finish(timeout_sec=500)
 
     results_online = client.get_online_features(feature_table='productRecommendationDemoFeature',
                                                 key='2',
-                                                feature_names=['feature_user_age', 'feature_user_gift_card_balance'])
+                                                feature_names=['feature_user_age', 'feature_user_purchasing_power'])
 
     print("=== Fetch features from online store: ===")
-    for key, value in results_online.items():
+    print(results_online)
+    """
+
+    #################################
+    # Offline Materialization
+    #################################
+    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 22), step=timedelta(days=1))
+    hdfsSink = HdfsSink(output_path=output_path)
+    settings = MaterializationSettings(name="productRecommendationFeatureSetting",
+                                       backfill_time=backfill_time,
+                                       sinks=[hdfsSink],
+                                       feature_names=["feature_user_age", "feature_user_purchasing_power"])
+
+    client.materialize_features(settings)
+    client.wait_job_to_finish(timeout_sec=900)
+
+    res_offline_store_0520 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
+    print("=== Fetch features from online store: ===")
+    for key, value in res_offline_store_0520.items():
+        print("{}: {}".format(key, value))
+
+    res_offline_store_0521 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/21")
+    print("=== Fetch features from online store: ===")
+    for key, value in res_offline_store_0521.items():
+        print("{}: {}".format(key, value))
+
+    res_offline_store_0522 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/22")
+    print("=== Fetch features from online store: ===")
+    for key, value in res_offline_store_0522.items():
         print("{}: {}".format(key, value))
 
 
