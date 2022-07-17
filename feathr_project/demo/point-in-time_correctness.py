@@ -1,12 +1,16 @@
 import os
 import glob
 import tempfile
+from math import sqrt
 import pandas as pd
 import pandavro as pdx
+from datetime import datetime, timedelta
 
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col
-
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
@@ -16,8 +20,8 @@ from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import HdfsSource
 from feathr import WindowAggTransformation
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import train_test_split
+from feathr import RedisSink
+from feathr import BackfillTime, MaterializationSettings
 
 
 def config_credentials():
@@ -319,10 +323,48 @@ def main():
                                                         test_size=0.2,
                                                         random_state=42)
 
-    print("## Train X: ## \n{}".format(train_x))
-    print("## Train Y: ## \n{}".format(train_y))
-    print("## Test X: ## \n{}".format(test_x))
-    print("## Test Y: ## \n{}".format(test_y))
+    model = GradientBoostingRegressor()
+    model.fit(train_x, train_y)
+
+    y_predict = model.predict(test_x)
+
+    y_actual = test_y.values.flatten().tolist()
+    rmse = sqrt(mean_squared_error(y_actual, y_predict))
+
+    sum_actuals = sum_errors = 0
+
+    for actual_val, predict_val in zip(y_actual, y_predict):
+        abs_error = actual_val - predict_val
+        if abs_error < 0:
+            abs_error = abs_error * -1
+
+        sum_errors = sum_errors + abs_error
+        sum_actuals = sum_actuals + actual_val
+
+    mean_abs_percent_error = sum_errors / sum_actuals
+    print("Model MAPE: \n{}".format(mean_abs_percent_error))
+    print("Model Accuracy: \n{}".format(1 - mean_abs_percent_error))
+
+    #################################
+    # Materialization
+    #################################
+    backfill_time = BackfillTime(start=datetime(2020, 5, 20), end=datetime(2020, 5, 23), step=timedelta(days=1))
+    redisSink = RedisSink(table_name="productRecommendationDemoFeature")
+    settings = MaterializationSettings(name="productRecommendationFeatureSetting",
+                                       backfill_time=backfill_time,
+                                       sinks=[redisSink],
+                                       feature_names=["feature_user_age", "feature_user_gift_card_balance"])
+
+    client.materialize_features(settings)
+    client.wait_job_to_finish(timeout_sec=500)
+
+    results_online = client.get_online_features(feature_table='productRecommendationDemoFeature',
+                                                key='2',
+                                                feature_names=['feature_user_age', 'feature_user_gift_card_balance'])
+
+    print("=== Fetch features from online store: ===")
+    for key, value in results_online.items():
+        print("{}: {}".format(key, value))
 
 
 if __name__ == "__main__":
