@@ -382,19 +382,14 @@ def main():
     client.wait_job_to_finish(timeout_sec=900)
 
     res_offline_store_0520 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
-    print("=== Fetch features from online store: ===")
-    for key, value in res_offline_store_0520.items():
-        print("{}: {}".format(key, value))
+    res_offline_store_0520.to_csv("20200520.csv")
 
     res_offline_store_0521 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/21")
-    print("=== Fetch features from online store: ===")
-    for key, value in res_offline_store_0521.items():
-        print("{}: {}".format(key, value))
+    res_offline_store_0521.to_csv("20200521.csv")
 
     res_offline_store_0522 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/22")
-    print("=== Fetch features from online store: ===")
-    for key, value in res_offline_store_0522.items():
-        print("{}: {}".format(key, value))
+    res_offline_store_0522.to_csv("20200522.csv")
+
 
 
 if __name__ == "__main__":
