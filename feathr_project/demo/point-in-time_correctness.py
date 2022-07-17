@@ -23,6 +23,7 @@ from feathr import WindowAggTransformation
 from feathr import RedisSink, HdfsSink
 from feathr import BackfillTime, MaterializationSettings
 from feathr.job_utils import get_result_df
+from feathr.feathr_configurations import SparkExecutionConfiguration
 
 
 def config_credentials():
@@ -378,7 +379,10 @@ def main():
                                        sinks=[hdfsSink],
                                        feature_names=["feature_user_age", "feature_user_purchasing_power"])
 
-    client.materialize_features(settings)
+    spark_configuration = dict()
+    spark_configuration["spark.sql.cbo.enabled"] = "true"
+
+    client.materialize_features(settings=settings, execution_configuratons=spark_configuration)
     client.wait_job_to_finish(timeout_sec=900)
 
     res_offline_store_0520 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
@@ -389,7 +393,6 @@ def main():
 
     res_offline_store_0522 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/22")
     res_offline_store_0522.to_csv("20200522.csv")
-
 
 
 if __name__ == "__main__":
