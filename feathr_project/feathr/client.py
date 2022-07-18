@@ -493,7 +493,7 @@ class FeathrClient(object):
         # set output format in job tags if it's set by user,
         # so that it can be used to parse the job result in the helper function
         if execution_configuratons is not None and OUTPUT_FORMAT in execution_configuratons:
-            job_tags[OUTPUT_FORMAT]= execution_configuratons[OUTPUT_FORMAT]
+            job_tags[OUTPUT_FORMAT] = execution_configuratons[OUTPUT_FORMAT]
 
         """
         - Job tags are for job metadata and it's not passed to the actual spark job (i.e. not visible to spark job), 
@@ -585,17 +585,23 @@ class FeathrClient(object):
             # in build_features it will assign anchor_list and derived_feature_list variable,
             # hence we are checking if those two variables exist to make sure the above condition is met
             if 'anchor_list' in dir(self) and 'derived_feature_list' in dir(self):
-                _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list, self.derived_feature_list, self.local_workspace_dir)
+                _FeatureRegistry.save_to_feature_config_from_context(self.anchor_list,
+                                                                     self.derived_feature_list,
+                                                                     self.local_workspace_dir)
             else:
                 raise RuntimeError("Please call FeathrClient.build_features() first in order to materialize the features")
 
-            udf_files = _PreprocessingPyudfManager.prepare_pyspark_udf_files(settings.feature_names, self.local_workspace_dir)
+            udf_files = _PreprocessingPyudfManager.prepare_pyspark_udf_files(settings.feature_names,
+                                                                             self.local_workspace_dir)
             # CLI will directly call this so the experiene won't be broken
             self._materialize_features_with_config(config_file_path, execution_configuratons, udf_files)
             if os.path.exists(config_file_path):
                 os.remove(config_file_path)
 
-    def _materialize_features_with_config(self, feature_gen_conf_path: str = 'feature_gen_conf/feature_gen.conf',execution_configuratons: Dict[str,str] = None, udf_files=[]):
+    def _materialize_features_with_config(self,
+                                          feature_gen_conf_path: str = 'feature_gen_conf/feature_gen.conf',
+                                          execution_configuratons: Dict[str, str] = None,
+                                          udf_files=[]):
         """Materializes feature data based on the feature generation config. The feature
         data will be materialized to the destination specified in the feature generation config.
 
