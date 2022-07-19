@@ -23,7 +23,6 @@ from feathr import WindowAggTransformation
 from feathr import RedisSink, HdfsSink
 from feathr import BackfillTime, MaterializationSettings
 from feathr.job_utils import get_result_df
-from feathr.feathr_configurations import SparkExecutionConfiguration
 
 
 def config_credentials():
@@ -271,7 +270,6 @@ def main():
     #####################
     # define derived key
     #####################
-
     feature_user_purchasing_power = DerivedFeature(name="feature_user_purchasing_power",
                                                    key=user_id,
                                                    feature_type=FLOAT,
@@ -306,9 +304,9 @@ def main():
     client.wait_job_to_finish(timeout_sec=500)
 
     df_res = download_result_df(client)
-    # print("Generated Features from Offline Store:")
-    # print(df_res)
-    # df_res.to_csv("join_all.csv")
+    print("Generated Features from Offline Store:")
+    print(df_res)
+    df_res.to_csv("join_all.csv")
 
     #################################
     # Train a machine learning model
@@ -347,7 +345,6 @@ def main():
     print("Model MAPE: \n{}".format(mean_abs_percent_error))
     print("Model Accuracy: \n{}".format(1 - mean_abs_percent_error))
 
-    """
     #################################
     # Online Materialization
     #################################
@@ -367,7 +364,6 @@ def main():
 
     print("=== Fetch features from online store: ===")
     print(results_online)
-    """
 
     #################################
     # Offline Materialization
