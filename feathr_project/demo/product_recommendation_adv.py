@@ -1,14 +1,9 @@
 import os
 import glob
 import tempfile
-from math import sqrt
 import pandas as pd
 import pandavro as pdx
-from datetime import datetime, timedelta
 
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col
 from azure.identity import DefaultAzureCredential
@@ -20,8 +15,6 @@ from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import HdfsSource
 from feathr import WindowAggTransformation
-from feathr import RedisSink, HdfsSink
-from feathr import BackfillTime, MaterializationSettings
 from feathr.job_utils import get_result_df
 
 
@@ -357,6 +350,9 @@ def main():
                                    event_timestamp_column="event_timestamp",
                                    timestamp_format="yyyy-MM-dd")
 
+    # Support multiple keys on joining
+    # two queries with two keys: user_id, product_id
+    # generate a single table of overall results
     client.get_offline_features(observation_settings=settings,
                                 feature_query=[user_feature_query,
                                                product_feature_query],
