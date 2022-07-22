@@ -121,8 +121,8 @@ def generate_purchase_history(user_scale, purchase_scale):
 
 
 def generate_observation(user_scale, product_scale, observation_scale):
-    start_date = datetime.date(2020, 1, 1)
-    end_date = datetime.date(2021, 1, 1)
+    start_date = datetime.date(2022, 1, 1)
+    end_date = datetime.date(2022, 6, 1)
     time_between_dates = end_date - start_date
     days_between_dates = time_between_dates.days
 
