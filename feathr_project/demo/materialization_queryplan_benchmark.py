@@ -82,7 +82,7 @@ def query_materialization(dataset_scale):
         (purchase_history.purchase_date >= date_sub(observation.event_timestamp, 600))
         & (purchase_history.purchase_date < date_sub(observation.event_timestamp, 400)))
     '''
-    print(obs_purchase_filter.count())
+    print("Tuples after getting data in the time window: {}".format(obs_purchase_filter.count()))
     end = time.perf_counter()
     print("## Processing time of getting data in the time window: {:.2f}s".format(end - start))
 
