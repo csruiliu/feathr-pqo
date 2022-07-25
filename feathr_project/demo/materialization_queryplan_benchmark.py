@@ -14,6 +14,7 @@ def conf_setup(app_string):
     spark_session = SparkSession.builder.config(conf=conf).getOrCreate()
 
     spark_context = spark_session.sparkContext
+    spark_context.setCheckpointDir("/home/ruiliu/Develop/feathr-pqo/feathr_project/demo/ckpt")
 
     return spark_session, spark_context
 
@@ -24,13 +25,13 @@ def get_dataset(dataset_scale_factor):
         purchase_history_path = "dataset/mock_purchase_history.csv"
         observation_path = "dataset/mock_observation.csv"
     elif dataset_scale_factor == "medium":
-        user_profile_path = "dataset/user_profile_1K.csv"
-        purchase_history_path = "dataset/purchase_history_100K.csv"
-        observation_path = "dataset/observation_100K.csv"
+        user_profile_path = "dataset/user_profile_10K.csv"
+        purchase_history_path = "dataset/purchase_history_500K.csv"
+        observation_path = "dataset/observation_500K.csv"
     else:
         user_profile_path = "dataset/user_profile_100.csv"
-        purchase_history_path = "dataset/purchase_history_50M.csv"
-        observation_path = "dataset/observation_50M.csv"
+        purchase_history_path = "dataset/purchase_history_1M.csv"
+        observation_path = "dataset/observation_1M.csv"
 
     return user_profile_path, purchase_history_path, observation_path
 
@@ -45,26 +46,16 @@ def query_materialization(dataset_scale):
     observation = spark_sess.read.csv(observation_path, header=True)
 
     obs_purchase_pit = (observation.join(purchase_history, on=["user_id"], how="inner")
-                        .filter((purchase_history.purchase_date >= date_sub(observation.event_timestamp, 500))
+                        .filter((purchase_history.purchase_date >= date_sub(observation.event_timestamp, 400))
                                 & (purchase_history.purchase_date < observation.event_timestamp)))
 
     obs_purchase_profile = obs_purchase_pit.join(user_profile, on=["user_id"], how="inner")
 
-    obs_purchase_profile_cache = obs_purchase_profile.cache()
-
-    '''
-    total_purchase = (obs_purchase_profile.dropDuplicates(["purchase_date"])
-                      .groupby("user_id")
-                      .agg(sum("purchase_amount").alias("total_purchase_pit")))
-
-    total_purchase_cache = total_purchase.cache()
-    '''
-    # query_result_pit = obs_purchase_profile.join(total_purchase, on=["user_id"], how="inner")
-    # print(query_result_pit.count())
+    obs_purchase_profile_ckpt = obs_purchase_profile.checkpoint(eager=True)
 
     ################################
 
-    # spark_sess, spark_ctx = conf_setup("query_materialization")
+    spark_sess, spark_ctx = conf_setup("query_materialization")
 
     user_profile = spark_sess.read.csv(user_profile_path, header=True)
     purchase_history = spark_sess.read.csv(purchase_history_path, header=True)
@@ -73,16 +64,21 @@ def query_materialization(dataset_scale):
     start = time.perf_counter()
     obs_purchase_pit = (observation.join(purchase_history, on=["user_id"], how="inner")
                         .filter((purchase_history.purchase_date >= date_sub(observation.event_timestamp, 600))
-                                & (purchase_history.purchase_date < date_sub(observation.event_timestamp, 500))))
+                                & (purchase_history.purchase_date < date_sub(observation.event_timestamp, 400))))
 
     obs_purchase_profile = obs_purchase_pit.join(user_profile, on=["user_id"], how="inner")
-    print(obs_purchase_profile.count())
+    print("Total Tuples: {}".format(obs_purchase_profile.count()))
     end = time.perf_counter()
     proc_time = end - start
     print("Query process time with materialization is {}".format(proc_time))
 
     start = time.perf_counter()
-    query_result_materialization = obs_purchase_profile.union(obs_purchase_profile_cache)
+    query_result_materialization = obs_purchase_profile.union(obs_purchase_profile_ckpt)
+    print("Total Tuples: {}".format(query_result_materialization.count()))
+    end = time.perf_counter()
+    proc_time = end - start
+    print("Query process time with materialization is {}".format(proc_time))
+
     '''
     total_purchase = (obs_purchase_profile.dropDuplicates(["purchase_date"])
                       .groupby("user_id")
@@ -96,11 +92,6 @@ def query_materialization(dataset_scale):
 
     query_result_materialization = obs_purchase_profile_all.join(total_purchase_all, on=["user_id"], how="inner")
     '''
-
-    print(query_result_materialization.count())
-    end = time.perf_counter()
-    proc_time = end - start
-    print("Query process time with materialization is {}".format(proc_time))
 
 
 def query_no_materialization(dataset_scale):
@@ -116,25 +107,9 @@ def query_no_materialization(dataset_scale):
     obs_purchase_pit = (observation.join(purchase_history, on=["user_id"], how="inner")
                         .filter((purchase_history.purchase_date >= date_sub(observation.event_timestamp, 600))
                                 & (purchase_history.purchase_date < observation.event_timestamp)))
-    """
-    total_purchase = (obs_purchase_pit.dropDuplicates(["purchase_date"])
-                      .groupby("user_id")
-                      .agg(sum("purchase_amount").alias("total_purchase_pit")))
-
-    total_purchase.show()
-    """
 
     query_result_no_materialization = obs_purchase_pit.join(user_profile, on=["user_id"], how="inner")
-
-    '''
-    total_purchase = (obs_purchase_profile.dropDuplicates(["purchase_date"])
-                      .groupby("user_id")
-                      .agg(sum("purchase_amount").alias("total_purchase_pit")))
-
-    query_result_no_materialization = obs_purchase_profile.join(total_purchase, on=["user_id"], how="inner")
-    '''
-
-    print(query_result_no_materialization.count())
+    print("Total Tuples: {}".format(query_result_no_materialization.count()))
     end = time.perf_counter()
     proc_time = end - start
     print("Query process time without materialization is {}".format(proc_time))
