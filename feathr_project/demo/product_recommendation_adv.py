@@ -319,7 +319,8 @@ def main():
                                                    feature_type=FLOAT,
                                                    input_features=[feature_user_gift_card_balance,
                                                                    feature_user_has_valid_credit_card],
-                                                   transform="feature_user_gift_card_balance + if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
+                                                   transform="feature_user_gift_card_balance + "
+                                                             "if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
 
     client.build_features(anchor_list=[user_agg_anchored,
                                        user_profile_anchored,
