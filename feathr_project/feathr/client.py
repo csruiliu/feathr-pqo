@@ -438,6 +438,8 @@ class FeathrClient(object):
             for feature_name in feature_query.feature_list:
                 feature_names.append(feature_name)
 
+        print("feature names: {}".format(feature_names))
+
         udf_files = _PreprocessingPyudfManager.prepare_pyspark_udf_files(feature_names, self.local_workspace_dir)
 
         # produce join config
