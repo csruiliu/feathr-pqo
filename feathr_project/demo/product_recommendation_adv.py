@@ -298,7 +298,7 @@ def main():
     ###############################
     # define agg anchored features
     ###############################
-    user_total_purchase_90d = Feature(name="feature_user_totla_purchase_in_90days",
+    user_total_purchase_90d = Feature(name="feature_user_total_purchase_in_90days",
                                       key=user_id,
                                       feature_type=FLOAT,
                                       transform=WindowAggTransformation(agg_expr="cast_float(purchase_amount)",
@@ -339,7 +339,7 @@ def main():
                                                     "feature_user_tax_rate",
                                                     "feature_user_gift_card_balance",
                                                     "feature_user_has_valid_credit_card",
-                                                    "feature_user_totla_purchase_in_90days",
+                                                    "feature_user_total_purchase_in_90days",
                                                     "feature_user_purchasing_power"],
                                       key=user_id)
 

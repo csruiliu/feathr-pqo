@@ -145,20 +145,116 @@ def main():
     # create feathr client
     client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
 
+    ####################
+    # datasets path
+    ####################
     user_observation_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
                               "sample_data/product_recommendation_sample/"
                               "user_observation_mock_data.csv")
 
-    settings = ObservationSettings(observation_path=user_observation_wasbs,
-                                   event_timestamp_column="event_timestamp",
-                                   timestamp_format="yyyy-MM-dd")
+    user_profile_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
+                          "sample_data/product_recommendation_sample/"
+                          "user_profile_mock_data.csv")
 
+    user_purchase_history_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
+                                   "sample_data/product_recommendation_sample/"
+                                   "user_purchase_history_mock_data.csv")
+
+    ####################################################
+    # define anchored features using user profile table
+    ####################################################
+    # define user_id key
+    user_id = TypedKey(key_column="user_id",
+                       key_column_type=ValueType.INT32,
+                       description="user id",
+                       full_name="product_recommendation.user_id")
+
+    ######################
+    # define anchored key
+    ######################
+    feature_user_age = Feature(name="feature_user_age",
+                               key=user_id,
+                               feature_type=INT32, transform="age")
+
+    feature_user_tax_rate = Feature(name="feature_user_tax_rate",
+                                    key=user_id,
+                                    feature_type=FLOAT,
+                                    transform="tax_rate_decimal")
+
+    feature_user_gift_card_balance = Feature(name="feature_user_gift_card_balance",
+                                             key=user_id,
+                                             feature_type=FLOAT,
+                                             transform="gift_card_balance")
+
+    feature_user_has_valid_credit_card = Feature(name="feature_user_has_valid_credit_card",
+                                                 key=user_id,
+                                                 feature_type=BOOLEAN,
+                                                 transform="number_of_credit_cards > 0")
+
+    user_profile_source = HdfsSource(name="user_profile_data",
+                                     path=user_profile_wasbs,
+                                     preprocessing=feathr_udf_preprocessing)
+
+    anchored_features = FeatureAnchor(name="anchored_features",
+                                      source=user_profile_source,
+                                      features=[feature_user_age,
+                                                feature_user_tax_rate,
+                                                feature_user_gift_card_balance,
+                                                feature_user_has_valid_credit_card])
+
+    #################################
+    # define aggregated anchored key
+    #################################
+    # this time window is based on the event_timestamp_column in observation dataset
+    # i.e., time travel back "window" period from the time of event_timestamp_column
+    agg_feature_user_purchase_90d = Feature(name="feature_user_total_purchase_in_90days",
+                                            key=user_id,
+                                            feature_type=FLOAT,
+                                            transform=WindowAggTransformation(agg_expr="cast_float(purchase_amount)",
+                                                                              agg_func="SUM",
+                                                                              window="90d"))
+
+    # we need event_timestamp_column since we need to decide if the purchase happens within the "time window"
+    purchase_history_source = HdfsSource(name="purchase_history_data",
+                                         path=user_purchase_history_wasbs,
+                                         event_timestamp_column="purchase_date",
+                                         timestamp_format="yyyy-MM-dd")
+
+    agg_anchored_features = FeatureAnchor(name="aggregation_anchored_features",
+                                          source=purchase_history_source,
+                                          features=[agg_feature_user_purchase_90d])
+
+    #################################
+    # build features using client
+    #################################
+    client.build_features(anchor_list=[anchored_features, agg_anchored_features])
+
+    ################################################
+    # create training data using point-in-time join
+    ################################################
     if client.spark_runtime == 'databricks':
         output_path = 'dbfs:/feathrazure_test.avro'
     else:
         output_path = feathr_output
 
-    print(output_path)
+    print("Output Path: {}".format(output_path))
+
+    feature_query = FeatureQuery(feature_list=["feature_user_age",
+                                               "feature_user_tax_rate",
+                                               "feature_user_gift_card_balance",
+                                               "feature_user_has_valid_credit_card",
+                                               "feature_user_total_purchase_in_90days"],
+                                 key=user_id)
+
+    settings = ObservationSettings(observation_path=user_observation_wasbs,
+                                   event_timestamp_column="event_timestamp",
+                                   timestamp_format="yyyy-MM-dd")
+
+    client.get_offline_features(observation_settings=settings,
+                                feature_query=feature_query,
+                                output_path=output_path)
+
+    client.wait_job_to_finish(timeout_sec=1000)
 
 
 if __name__ == "__main__":
