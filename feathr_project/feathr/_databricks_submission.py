@@ -129,8 +129,8 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             main_file_path (str): main file paths, usually your main jar file
             main_class_name (str): name of your main class
             arguments (str): all the arguments you want to pass into the spark job
-            job_tags (str): tags of the job, for example you might want to put your user ID, or a tag with a certain information
-            configuration (Dict[str, str]): Additional configs for the spark job
+            job_tags (str): tags of the job, for example you might want to put your user ID,
+            or a tag with a certain information configuration (Dict[str, str]): Additional configs for the spark job
         """
 
         if isinstance(self.config_template, str):
@@ -139,25 +139,35 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
         else:
             # otherwise users might have missed the quotes in the config.
             submission_params = self.config_template
-            logger.warning("Databricks config template loaded in a non-string fashion. Please consider providing the config template in a string fashion.")
+            logger.warning("Databricks config template loaded in a non-string fashion. "
+                           "Please consider providing the config template in a string fashion.")
 
         submission_params['run_name'] = job_name
         if 'existing_cluster_id' not in submission_params:
             # if users don't specify existing_cluster_id
             submission_params['new_cluster']['spark_conf'] = configuration
             submission_params['new_cluster']['custom_tags'] = job_tags
+
         # the feathr main jar file is anyway needed regardless it's pyspark or scala spark
         submission_params['libraries'][0]['jar'] = self.upload_or_get_cloud_path(main_jar_path)
-        # see here for the submission parameter definition https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--request-structure-6
+        # see here for the submission parameter definition
+        # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--request-structure-6
+
         if python_files:
-            # this is a pyspark job. definition here: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--sparkpythontask
+            # this is a pyspark job. definition here:
+            # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--sparkpythontask
             # the first file is the pyspark driver code. we only need the driver code to execute pyspark
-            param_and_file_dict = {"parameters": arguments, "python_file": self.upload_or_get_cloud_path(python_files[0])}
-            submission_params.setdefault('spark_python_task',param_and_file_dict)
+            param_and_file_dict = {"parameters": arguments,
+                                   "python_file": self.upload_or_get_cloud_path(python_files[0])}
+            submission_params.setdefault('spark_python_task', param_and_file_dict)
         else:
             # this is a scala spark job
             submission_params['spark_jar_task']['parameters'] = arguments
             submission_params['spark_jar_task']['main_class_name'] = main_class_name
+
+        print("#### Submission Parameters ####")
+        print(submission_params)
+        print("###############################")
 
         result = RunsApi(self.api_client).submit_run(submission_params)
 
@@ -165,7 +175,7 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             # see if we can parse the returned result
             self.res_job_id = result['run_id']
         except:
-            logger.error("Submitting Feathr job to Databricks cluster failed. Message returned from Databricks: {}", result)
+            logger.error("Submitting Feathr job to Databricks cluster failed. Message from Databricks: {}", result)
             exit(1)
 
         result = RunsApi(self.api_client).get_run(self.res_job_id)

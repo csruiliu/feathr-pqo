@@ -250,7 +250,8 @@ class FeathrClient(object):
                 source_names[anchor.source.name] = anchor.source
 
         preprocessingPyudfManager = _PreprocessingPyudfManager()
-        _PreprocessingPyudfManager.build_anchor_preprocessing_metadata(anchor_list, self.local_workspace_dir)
+        preprocessingPyudfManager.build_anchor_preprocessing_metadata(anchor_list, self.local_workspace_dir)
+
         self.registry.save_to_feature_config_from_context(anchor_list, derived_feature_list, self.local_workspace_dir)
         self.anchor_list = anchor_list
         self.derived_feature_list = derived_feature_list
@@ -491,7 +492,7 @@ class FeathrClient(object):
                                                        feature_config=os.path.join(self.local_workspace_dir, 'feature_conf/'),
                                                        job_output_path=feathr_feature['outputPath'])
 
-        job_tags = {OUTPUT_PATH_TAG:feature_join_job_params.job_output_path}
+        job_tags = {OUTPUT_PATH_TAG: feature_join_job_params.job_output_path}
         # set output format in job tags if it's set by user,
         # so that it can be used to parse the job result in the helper function
         if execution_configuratons is not None and OUTPUT_FORMAT in execution_configuratons:
