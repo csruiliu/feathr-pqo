@@ -114,19 +114,15 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
         assert main_jar_path, 'main_jar_path should not be none or empty but it is none or empty.'
         if main_jar_path.startswith('abfs'):
             main_jar_cloud_path = main_jar_path
-            logger.info(
-                'Cloud path {} is used for running the job: {}', main_jar_path, job_name)
+            logger.info('Cloud path {} is used for running the job: {}', main_jar_path, job_name)
         else:
-            logger.info('Uploading jar from {} to cloud for running job: {}',
-                        main_jar_path, job_name)
+            logger.info('Uploading jar from {} to cloud for running job: {}', main_jar_path, job_name)
             main_jar_cloud_path = self._datalake.upload_file_to_workdir(main_jar_path)
-            logger.info('{} is uploaded to {} for running job: {}',
-                        main_jar_path, main_jar_cloud_path, job_name)
+            logger.info('{} is uploaded to {} for running job: {}', main_jar_path, main_jar_cloud_path, job_name)
 
         reference_file_paths = []
         for file_path in reference_files_path:
-            reference_file_paths.append(
-                self._datalake.upload_file_to_workdir(file_path))
+            reference_file_paths.append(self._datalake.upload_file_to_workdir(file_path))
 
         self.current_job_info = self._api.create_spark_batch_job(job_name=job_name,
                                                                  main_file=main_jar_cloud_path,
