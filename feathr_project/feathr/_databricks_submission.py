@@ -21,6 +21,7 @@ from databricks_cli.dbfs.api import DbfsApi
 from databricks_cli.sdk.api_client import ApiClient
 from databricks_cli.runs.api import RunsApi
 
+
 class _FeathrDatabricksJobLauncher(SparkJobLauncher):
     """Class to interact with Databricks Spark cluster
         This is a light-weight databricks job runner, users should use the provided template json string to get more fine controlled environment for databricks cluster.
@@ -41,14 +42,11 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             config_template (str): config template for databricks cluster. See https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--runs-submit for more details.
             databricks_work_dir (_type_, optional): databricks_work_dir must start with dbfs:/. Defaults to 'dbfs:/feathr_jobs'.
         """
-    def __init__(
-            self,
-            workspace_instance_url: str,
-            token_value: str,
-            config_template: Union[str,Dict],
-            databricks_work_dir: str = 'dbfs:/feathr_jobs',
-    ):
-
+    def __init__(self,
+                 workspace_instance_url: str,
+                 token_value: str,
+                 config_template: Union[str,Dict],
+                 databricks_work_dir: str = 'dbfs:/feathr_jobs'):
 
         # Below we will use Databricks job APIs (as well as many other APIs) to submit jobs or transfer files
         # For Job APIs, see https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs
@@ -58,7 +56,8 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
         self.workspace_instance_url = workspace_instance_url.rstrip('/')
         self.auth_headers = CaseInsensitiveDict()
 
-        # Authenticate the REST APIs. Documentation: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/latest/authentication
+        # Authenticate the REST APIs.
+        # Documentation: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/latest/authentication
         self.auth_headers['Accept'] = 'application/json'
         self.auth_headers['Authorization'] = f'Bearer {token_value}'
         self.databricks_work_dir = databricks_work_dir
@@ -79,7 +78,10 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
                 files = {'file': data}
                 # for DBFS APIs, see: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/latest/dbfs
                 r = requests.post(url=self.workspace_instance_url+'/api/2.0/dbfs/put',
-                                  headers=self.auth_headers, files=files,  data={'overwrite': 'true', 'path': returned_path})
+                                  headers=self.auth_headers,
+                                  files=files,
+                                  data={'overwrite': 'true', 'path': returned_path})
+
                 logger.debug('{} is downloaded and then uploaded to location: {}',
                              local_path_or_http_path, returned_path)
         elif src_parse_result.scheme.startswith('dbfs'):
@@ -165,10 +167,6 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             submission_params['spark_jar_task']['parameters'] = arguments
             submission_params['spark_jar_task']['main_class_name'] = main_class_name
 
-        print("#### Submission Parameters ####")
-        print(submission_params)
-        print("###############################")
-
         result = RunsApi(self.api_client).submit_run(submission_params)
 
         try:
@@ -199,7 +197,8 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
                 return True
             elif status in {'INTERNAL_ERROR', 'FAILED', 'TIMEDOUT', 'CANCELED'}:
                 result = RunsApi(self.api_client).get_run_output(self.res_job_id)
-                # See here for the returned fields: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-8
+                # See here for the returned fields:
+                # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-8
                 # print out logs and stack trace if the job has failed
                 logger.error("Feathr job has failed. Please visit this page to view error message: {}", self.job_url)
                 if "error" in result:
@@ -216,7 +215,8 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
         assert self.res_job_id is not None
         result = RunsApi(self.api_client).get_run(self.res_job_id)
         # first try to get result state. it might not be available, and if that's the case, try to get life_cycle_state
-        # see result structure: https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-6
+        # see result structure:
+        # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-6
         res_state = result['state'].get('result_state') or result['state']['life_cycle_state']
         assert res_state is not None
         return res_state
@@ -231,7 +231,6 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
         # in case users call this API even when there's no tags available
         return None if custom_tags is None else custom_tags[OUTPUT_PATH_TAG]
 
-
     def get_job_tags(self) -> Dict[str, str]:
         """Get job tags
 
@@ -239,7 +238,8 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             Dict[str, str]: a dict of job tags
         """
         assert self.res_job_id is not None
-        # For result structure, see https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-6
+        # For result structure, see more details:
+        # https://docs.microsoft.com/en-us/azure/databricks/dev-tools/api/2.0/jobs#--response-structure-6
         result = RunsApi(self.api_client).get_run(self.res_job_id)
         
         if 'new_cluster' in result['cluster_spec']:
@@ -247,15 +247,17 @@ class _FeathrDatabricksJobLauncher(SparkJobLauncher):
             return custom_tags
         else:
             # this is not a new cluster; it's an existing cluster.
-            logger.warning("Job tags are not available since you are using an existing Databricks cluster. Consider using 'new_cluster' in databricks configuration.")
+            logger.warning("Job tags are not available since you are using an existing Databricks cluster. "
+                           "Consider using 'new_cluster' in databricks configuration.")
             return None
-    
 
     def download_result(self, result_path: str, local_folder: str):
         """
-        Supports downloading files from the result folder. Only support paths starts with `dbfs:/` and only support downloading files in one folder (per Spark's design, everything will be in the result folder in a flat manner)
+        Supports downloading files from the result folder. Only support paths starts with `dbfs:/`
+        and only support downloading files in one folder (per Spark's design, everything will be in the result folder in a flat manner)
         """
         if not result_path.startswith('dbfs'):
-            raise RuntimeError('Currently only paths starting with dbfs is supported for downloading results from a databricks cluster. The path should start with \"dbfs:\" .')
+            raise RuntimeError('Currently only paths starting with dbfs is supported for downloading results from a databricks cluster. '
+                               'The path should start with \"dbfs:\" .')
 
         DbfsApi(self.api_client).cp(recursive=True, overwrite=True, src=result_path, dst=local_folder)

@@ -8,8 +8,10 @@ from urllib.parse import urlparse
 from os.path import basename
 from enum import Enum
 
-from azure.identity import (ChainedTokenCredential, DefaultAzureCredential,
-                            DeviceCodeCredential, EnvironmentCredential,
+from azure.identity import (ChainedTokenCredential,
+                            DefaultAzureCredential,
+                            DeviceCodeCredential,
+                            EnvironmentCredential,
                             ManagedIdentityCredential)
 from azure.storage.filedatalake import DataLakeServiceClient
 from azure.synapse.spark import SparkClient
@@ -19,6 +21,7 @@ from tqdm import tqdm
 
 from feathr._abc import SparkJobLauncher
 from feathr.constants import *
+
 
 class LivyStates(Enum):
     """ Adapt LivyStates over to relax the dependency for azure-synapse-spark pacakge.
@@ -43,14 +46,23 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
     """
     Submits spark jobs to a Synapse spark cluster.
     """
-    def __init__(self, synapse_dev_url: str, pool_name: str, datalake_dir: str, executor_size: str, executors: int, credential = None):
+    def __init__(self,
+                 synapse_dev_url: str,
+                 pool_name: str,
+                 datalake_dir: str,
+                 executor_size: str,
+                 executors: int,
+                 credential=None):
         # use DeviceCodeCredential if EnvironmentCredential is not available
         self.credential = credential
         # use the same credential for authentication to avoid further login.
-        self._api = _SynapseJobRunner(
-            synapse_dev_url, pool_name, executor_size=executor_size, executors=executors, credential=self.credential)
-        self._datalake = _DataLakeFiler(
-            datalake_dir, credential=self.credential)
+        self._api = _SynapseJobRunner(synapse_dev_url,
+                                      pool_name,
+                                      executor_size=executor_size,
+                                      executors=executors,
+                                      credential=self.credential)
+
+        self._datalake = _DataLakeFiler(datalake_dir, credential=self.credential)
 
     def upload_or_get_cloud_path(self, local_path_or_http_path: str):
         """
@@ -69,8 +81,14 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
 
         return self._datalake.download_file(result_path, local_folder)
 
-    def submit_feathr_job(self, job_name: str, main_jar_path: str = None,  main_class_name: str = None, arguments: List[str] = None,
-                          python_files: List[str]= None, reference_files_path: List[str] = None, job_tags: Dict[str, str] = None,
+    def submit_feathr_job(self,
+                          job_name: str,
+                          main_jar_path: str = None,
+                          main_class_name: str = None,
+                          arguments: List[str] = None,
+                          python_files: List[str]= None,
+                          reference_files_path: List[str] = None,
+                          job_tags: Dict[str, str] = None,
                           configuration: Dict[str, str] = None):
         """
         Submits the feathr job
@@ -89,9 +107,9 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
             job_name (str): name of the job
             main_jar_path (str): main file paths, usually your main jar file
             main_class_name (str): name of your main class
-            arguments (str): all the arugments you want to pass into the spark job
-            job_tags (str): tags of the job, for exmaple you might want to put your user ID, or a tag with a certain information
-            configuration (Dict[str, str]): Additional configs for the spark job
+            arguments (str): all the arguments you want to pass into the spark job
+            job_tags (str): tags of the job, for example you might want to put your user ID,
+            or a tag with a certain information configuration (Dict[str, str]): Additional configs for the spark job
         """
         assert main_jar_path, 'main_jar_path should not be none or empty but it is none or empty.'
         if main_jar_path.startswith('abfs'):
@@ -167,7 +185,6 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
         return self._api.get_spark_batch_job(self.current_job_info.id).tags
 
 
-
 class _SynapseJobRunner(object):
     """
     Class to interact with Synapse Spark cluster
@@ -177,18 +194,18 @@ class _SynapseJobRunner(object):
             logger.warning('No valid Azure credential detected. Using DefaultAzureCredential')
             credential = DefaultAzureCredential()
 
-        self.client = SparkClient(
-            credential=credential,
-            endpoint=synapse_dev_url,
-            spark_pool_name=spark_pool_name
-        )
+        self.client = SparkClient(credential=credential,
+                                  endpoint=synapse_dev_url,
+                                  spark_pool_name=spark_pool_name)
 
         self._executor_size = executor_size
         self._executors = executors
-        self.EXECUTOR_SIZE = {'Small': {'Cores': 4, 'Memory': '28g'}, 'Medium': {'Cores': 8, 'Memory': '56g'},
+        self.EXECUTOR_SIZE = {'Small': {'Cores': 4, 'Memory': '28g'},
+                              'Medium': {'Cores': 8, 'Memory': '56g'},
                               'Large': {'Cores': 16, 'Memory': '112g'}}
 
-    def _categorized_files(self, reference_files: List[str]):
+    @staticmethod
+    def _categorized_files(reference_files: List[str]):
         """categorize files to make sure they are in the ready to submissio format
 
         Args:
@@ -231,8 +248,16 @@ class _SynapseJobRunner(object):
 
         return self.client.spark_batch.cancel_spark_batch_job(job_id)
 
-    def create_spark_batch_job(self, job_name, main_file, class_name=None,
-                               arguments=None, python_files=None, reference_files=None, archives=None, configuration=None, tags=None):
+    def create_spark_batch_job(self,
+                               job_name,
+                               main_file,
+                               class_name=None,
+                               arguments=None,
+                               python_files=None,
+                               reference_files=None,
+                               archives=None,
+                               configuration=None,
+                               tags=None):
         """
         Submit a spark job to a certain cluster
         """
@@ -250,22 +275,21 @@ class _SynapseJobRunner(object):
         # If file=python_files[0], then it's using Pyspark
         spark_execution_file = python_files[0] if python_files else main_file
 
-        spark_batch_job_options = SparkBatchJobOptions(
-            tags=tags,
-            name=job_name,
-            file=spark_execution_file,
-            class_name=class_name,
-            python_files=python_files[1:],
-            arguments=arguments,
-            jars=jars,
-            files=files,
-            archives=archives,
-            configuration=configuration,
-            driver_memory=driver_memory,
-            driver_cores=driver_cores,
-            executor_memory=executor_memory,
-            executor_cores=executor_cores,
-            executor_count=self._executors)
+        spark_batch_job_options = SparkBatchJobOptions(tags=tags,
+                                                       name=job_name,
+                                                       file=spark_execution_file,
+                                                       class_name=class_name,
+                                                       python_files=python_files[1:],
+                                                       arguments=arguments,
+                                                       jars=jars,
+                                                       files=files,
+                                                       archives=archives,
+                                                       configuration=configuration,
+                                                       driver_memory=driver_memory,
+                                                       driver_cores=driver_cores,
+                                                       executor_memory=executor_memory,
+                                                       executor_cores=executor_cores,
+                                                       executor_count=self._executors)
 
         return self.client.spark_batch.create_spark_batch_job(spark_batch_job_options, detailed=True)
 
@@ -298,15 +322,13 @@ class _DataLakeFiler(object):
 
         if len(datalake_path_split) > 3:
             # directory exists in datalake path
-            self.dir_client = self.file_system_client.get_directory_client(
-                '/'.join(datalake_path_split[3:]))
+            self.dir_client = self.file_system_client.get_directory_client('/'.join(datalake_path_split[3:]))
             self.dir_client.create_directory()
         else:
             # otherwise use root folder instead
             self.dir_client = self.file_system_client.get_directory_client('/')
 
-        self.datalake_dir = datalake_dir + \
-                            '/' if datalake_dir[-1] != '/' else datalake_dir
+        self.datalake_dir = datalake_dir + '/' if datalake_dir[-1] != '/' else datalake_dir
 
     def upload_file_to_workdir(self, src_file_path: str) -> str:
         """
@@ -356,7 +378,8 @@ class _DataLakeFiler(object):
     def download_file(self, target_adls_directory: str, local_dir_cache: str):
         """
         Download file to a local cache. Supporting download a folder and the content in its subfolder.
-        Note that the code will just download the content in the root folder, and the folder in the next level (rather than recursively for all layers of folders)
+        Note that the code will just download the content in the root folder,
+        and the folder in the next level (rather than recursively for all layers of folders)
 
         Args:
             target_adls_directory (str): target ADLS directory
@@ -380,25 +403,25 @@ class _DataLakeFiler(object):
         # list all the files under the certain folder, and download them preserving the hierarchy
         for folder in result_folders:
             folder_name = basename(folder)
-            file_in_folder = [os.path.join(folder_name, basename(file_path.name)) for file_path in self.file_system_client.get_paths(
-            path=folder, recursive=False) if not file_path.is_directory]
+            file_in_folder = [os.path.join(folder_name, basename(file_path.name)) for file_path in
+                              self.file_system_client.get_paths(path=folder, recursive=False) if
+                              not file_path.is_directory]
             local_paths = [os.path.join(local_dir_cache, file_name)
                        for file_name in file_in_folder]
             self._download_file_list(local_paths, file_in_folder, directory_client)
 
         # download files that are in the result folder
-        local_paths = [os.path.join(local_dir_cache, file_name)
-                       for file_name in result_paths]
+        local_paths = [os.path.join(local_dir_cache, file_name) for file_name in result_paths]
         self._download_file_list(local_paths, result_paths, directory_client)
 
-        logger.info('Finish downloading files from {} to {}.',
-                    target_adls_directory,local_dir_cache)
+        logger.info('Finish downloading files from {} to {}.', target_adls_directory,local_dir_cache)
 
-    def _download_file_list(self, local_paths: List[str], result_paths, directory_client):
+    @staticmethod
+    def _download_file_list(local_paths: List[str], result_paths, directory_client):
         '''
         Download filelist to local
         '''
-        for idx, file_to_write in enumerate(tqdm(result_paths,desc="Downloading result files: ")):
+        for idx, file_to_write in enumerate(tqdm(result_paths, desc="Downloading result files: ")):
             try:
                 os.makedirs(os.path.dirname(local_paths[idx]), exist_ok=True)
                 local_file = open(local_paths[idx], 'wb')
