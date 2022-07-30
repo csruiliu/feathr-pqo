@@ -1,21 +1,24 @@
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from pyspark.sql.functions import col,sum,avg,max
-from feathr.job_utils import get_result_df
-from feathr.anchor import FeatureAnchor
-from feathr.dtype import STRING, BOOLEAN, FLOAT, INT32, ValueType
-from feathr.feature import Feature
-from feathr.query_feature_list import FeatureQuery
-from feathr.settings import ObservationSettings
-from feathr.source import INPUT_CONTEXT, HdfsSource
-from feathr.typed_key import TypedKey
-from feathr.transformation import WindowAggTransformation
-from pyspark.sql import SparkSession, DataFrame
-from test_fixture import basic_test_setup
+
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col
+
 from feathr import (BackfillTime, MaterializationSettings)
+from feathr import Feature
+from feathr import FeatureAnchor
+from feathr import FeatureQuery
+from feathr import HdfsSource
+from feathr import ObservationSettings
 from feathr import RedisSink
-from test_fixture import snowflake_test_setup
+from feathr import STRING, FLOAT, INT32, ValueType
+from feathr import TypedKey
+from feathr import WindowAggTransformation
+from feathr.utils.job_utils import get_result_df
+from test_fixture import (snowflake_test_setup, get_online_test_table_name, basic_test_setup)
+from test_utils.constants import Constants
+
 
 def trip_distance_preprocessing(df: DataFrame):
     df = df.withColumn("trip_distance", df.trip_distance.cast('double') - 90000)
@@ -87,8 +90,7 @@ def test_non_swa_feature_gen_with_offline_preprocessing():
 
     client.build_features(anchor_list=[regular_anchor])
 
-    now = datetime.now()
-    online_test_table = ''.join(['nycTaxiCITable', '_', str(now.minute), '_', str(now.second)])
+    online_test_table = get_online_test_table_name('nycTaxiCITable')
 
     backfill_time = BackfillTime(start=datetime(
         2020, 5, 20), end=datetime(2020, 5, 20), step=timedelta(days=1))
@@ -103,7 +105,7 @@ def test_non_swa_feature_gen_with_offline_preprocessing():
     client.materialize_features(settings)
     # just assume the job is successful without validating the actual result in Redis. Might need to consolidate
     # this part with the test_feathr_online_store test case
-    client.wait_job_to_finish(timeout_sec=900)
+    client.wait_job_to_finish(timeout_sec=Constants.SPARK_JOB_TIMEOUT_SECONDS)
 
     res = client.get_online_features(online_test_table, '2020-04-01 07:21:51', [
         'f_is_long_trip_distance', 'f_day_of_week'])
@@ -149,8 +151,7 @@ def test_feature_swa_feature_gen_with_preprocessing():
 
     client.build_features(anchor_list=[agg_anchor])
 
-    now = datetime.now()
-    online_test_table = ''.join(['nycTaxiCITable', '_', str(now.minute), '_', str(now.second)])
+    online_test_table = get_online_test_table_name('nycTaxiCITable')
 
     backfill_time = BackfillTime(start=datetime(
         2020, 5, 20), end=datetime(2020, 5, 20), step=timedelta(days=1))
@@ -165,7 +166,7 @@ def test_feature_swa_feature_gen_with_preprocessing():
     client.materialize_features(settings)
     # just assume the job is successful without validating the actual result in Redis. Might need to consolidate
     # this part with the test_feathr_online_store test case
-    client.wait_job_to_finish(timeout_sec=900)
+    client.wait_job_to_finish(timeout_sec=Constants.SPARK_JOB_TIMEOUT_SECONDS)
 
     res = client.get_online_features(online_test_table, '265', ['f_location_avg_fare', 'f_location_max_fare'])
     assert res == [1000041.625, 1000100.0]
@@ -265,7 +266,7 @@ def test_feathr_get_offline_features_hdfs_source():
                                 output_path=output_path)
 
     # assuming the job can successfully run; otherwise it will throw exception
-    client.wait_job_to_finish(timeout_sec=900)
+    client.wait_job_to_finish(timeout_sec=Constants.SPARK_JOB_TIMEOUT_SECONDS)
 
     # download result and just assert the returned result is not empty
     res_df = get_result_df(client)
@@ -381,7 +382,7 @@ def test_get_offline_feature_two_swa_with_diff_preprocessing():
                                 output_path=output_path)
 
     # assuming the job can successfully run; otherwise it will throw exception
-    client.wait_job_to_finish(timeout_sec=900)
+    client.wait_job_to_finish(timeout_sec=Constants.SPARK_JOB_TIMEOUT_SECONDS)
     res_df = get_result_df(client)
 
     # download result and just assert the returned result is not empty
@@ -449,7 +450,7 @@ def test_feathr_get_offline_features_from_snowflake():
                                 output_path=output_path)
 
     # assuming the job can successfully run; otherwise it will throw exception
-    client.wait_job_to_finish(timeout_sec=900)
+    client.wait_job_to_finish(timeout_sec=Constants.SPARK_JOB_TIMEOUT_SECONDS)
 
     res = get_result_df(client)
     # just assume there are results.

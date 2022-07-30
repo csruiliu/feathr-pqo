@@ -7,7 +7,10 @@ REDIS_PASSWORD = 'REDIS_PASSWORD'
 MB_BYTES = 1048576
 
 INPUT_CONTEXT="PASSTHROUGH"
-
+RELATION_CONTAINS = "CONTAINS"
+RELATION_BELONGSTO = "BELONGSTO"
+RELATION_CONSUMES = "CONSUMES"
+RELATION_PRODUCES = "PRODUCES"
 # For use in registry. 
 # For type definition, think it's like a schema of a table. 
 # This version field is mainly to smooth possible future upgrades, 
@@ -15,6 +18,7 @@ INPUT_CONTEXT="PASSTHROUGH"
 REGISTRY_TYPEDEF_VERSION="v1"
 
 TYPEDEF_SOURCE=f'feathr_source_{REGISTRY_TYPEDEF_VERSION}'
+# TODO: change the name from feathr_workspace_ to feathr_project_
 TYPEDEF_FEATHR_PROJECT=f'feathr_workspace_{REGISTRY_TYPEDEF_VERSION}'
 TYPEDEF_DERIVED_FEATURE=f'feathr_derived_feature_{REGISTRY_TYPEDEF_VERSION}'
 TYPEDEF_ANCHOR=f'feathr_anchor_{REGISTRY_TYPEDEF_VERSION}'
@@ -24,3 +28,4 @@ TYPEDEF_ARRAY_ANCHOR=f"array<feathr_anchor_{REGISTRY_TYPEDEF_VERSION}>"
 TYPEDEF_ARRAY_DERIVED_FEATURE=f"array<feathr_derived_feature_{REGISTRY_TYPEDEF_VERSION}>"
 TYPEDEF_ARRAY_ANCHOR_FEATURE=f"array<feathr_anchor_feature_{REGISTRY_TYPEDEF_VERSION}>"
 
+FEATHR_MAVEN_ARTIFACT="com.linkedin.feathr:feathr_2.12:0.4.0"

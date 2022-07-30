@@ -1,13 +1,13 @@
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Use the README.md in root project
+# Use the README.md from /docs
 root_path = Path(__file__).resolve().parent.parent
-long_description = (root_path / "README.md").read_text()
+long_description = (root_path / "docs/README.md").read_text()
 
 setup(
     name='feathr',
-    version='0.4.0',
+    version='0.6.0',
     long_description=long_description,
     long_description_content_type="text/markdown",
     author_email="frame_dev@linkedin.com",

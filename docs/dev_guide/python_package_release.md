@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Python Project Build and Release Guide
-parent: Feathr Developer Guides
+parent: Developer Guides
 ---
 
 
@@ -27,6 +27,14 @@ parent: Feathr Developer Guides
   of your pypi.org account is needed to finish the uploading.
 - If upload completed, you can see your new version in https://pypi.org/manage/project/feathr/.
 - You can also delete the uploaded package in https://pypi.org/manage/project/feathr/releases/.
+
+# Testing
+After the package is released to PyPi, please test the newly uploaded package works. Here are the steps:
+- Git clone our code from github
+- Create a new virtual environment but don't compile against local source
+- Install feathr with `pip install feathr`
+- Execute `feathr` and `feathr init` in terminal to check things work as expected
+- Open one of our notebook tutorial to run the notebook end-to-end to ensure it works
 
 # FAQ
 
