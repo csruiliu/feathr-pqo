@@ -275,7 +275,8 @@ def main():
                                                    feature_type=FLOAT,
                                                    input_features=[feature_user_gift_card_balance,
                                                                    feature_user_has_valid_credit_card],
-                                                   transform="feature_user_gift_card_balance + if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
+                                                   transform="feature_user_gift_card_balance + "
+                                                             "if_else(toBoolean(feature_user_has_valid_credit_card), 100, 0)")
 
     # build features in client
     client.build_features(anchor_list=[anchored_features, agg_anchored_features],
@@ -378,7 +379,7 @@ def main():
     spark_configuration = dict()
     spark_configuration["spark.sql.cbo.enabled"] = "true"
 
-    client.materialize_features(settings=settings, execution_configuratons=spark_configuration)
+    client.materialize_features(settings=settings, execution_configurations=spark_configuration)
     client.wait_job_to_finish(timeout_sec=900)
 
     res_offline_store_0520 = get_result_df(client, "avro", output_path + "/df0/daily/2020/05/20")
