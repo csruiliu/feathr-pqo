@@ -22,7 +22,7 @@ from feathr import HdfsSource
 from feathr import WindowAggTransformation
 from feathr import RedisSink, HdfsSink
 from feathr import BackfillTime, MaterializationSettings
-from feathr.job_utils import get_result_df
+from feathr.utils.job_utils import get_result_df
 
 
 def config_credentials():

@@ -15,7 +15,7 @@ from feathr import BOOLEAN, FLOAT, INT32, ValueType
 from feathr import Feature, DerivedFeature, FeatureAnchor
 from feathr import HdfsSource
 from feathr import WindowAggTransformation
-from feathr.job_utils import get_result_df
+from feathr.utils.job_utils import get_result_df
 
 
 def config_credentials():
