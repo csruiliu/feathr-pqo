@@ -2,20 +2,40 @@
 
 Feathr-PQO is built on top of [feathr](https://github.com/linkedin/feathr) v0.6.0.
 
-## Runtime Envrionment
+## Installation
+
+### Prerequisite
 
 Python 3.8.12
 
-Install 3rd-party libraries
+SBT: 1.6.2
+
+Apache Spark: 3.1.3
+
+Scala: 2.12.15
+
+### Build Feathr Python 
+
+Feathr assumes that we have the Apache Kafka C/C++ client library installed. 
+
+To install it, follow the [install instructions](https://github.com/edenhill/librdkafka#installation) on the librdkafka home page.
 
 ```
 cd /feathr-pqo/feathr_project (where setup.py is located)
-pip3 install .
+pip3 install feathr
 ```
 
-## Modification 
+### Build Feathr Scala  
 
-1. Modifying the `get_offline_features` in `client.py`
+Download and Configure SBT
+
+`sonatype.sbt` is not necessary if you want to test locally.
+
+```
+sbt compile
+```
+
+
 
 
 
