@@ -56,7 +56,7 @@ class FeatureGenerationJobParams:
 
     Attributes:
         generation_config_path: Path to the feature generation config.
-        feature_config: Path to the features config.
+        feature_config: Path to the feature config.
     """
 
     def __init__(self, generation_config_path, feature_config):
@@ -258,7 +258,7 @@ class FeathrClient(object):
         for anchor in self.anchor_list:
             if hasattr(anchor.source, "get_required_properties"):
                 props.extend(anchor.source.get_required_properties())
-        if len(props)>0:
+        if len(props) > 0:
             self.system_properties = props
 
         # Pretty print anchor_list
@@ -542,7 +542,7 @@ class FeathrClient(object):
             main_jar_path=self._FEATHR_JOB_JAR_PATH,
             python_files=cloud_udf_paths,
             job_tags=job_tags,
-            main_class_name='com.linkedin.feathr.offline.job.FeatureJoinJob',
+            main_class_name='com.linkedin.feathr.offline.job.FeatureJoinJobPQO',
             arguments=[
                 '--join-config', self.feathr_spark_launcher.upload_or_get_cloud_path(
                     feature_join_job_params.join_config_path),

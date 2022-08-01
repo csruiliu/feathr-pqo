@@ -149,6 +149,7 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
                 # This is a PySpark job, no more things to do
                 pass
         main_jar_cloud_path = None
+
         if main_jar_path:
             # Now we have a main jar, either feathr or noop
             if main_jar_path.startswith('abfs'):

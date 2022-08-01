@@ -17,6 +17,8 @@ from feathr import HdfsSource
 from feathr import WindowAggTransformation
 from feathr.utils.job_utils import get_result_df
 
+from feathr.utils._envvariableutil import _EnvVaraibleUtil
+
 
 def config_credentials():
     # resource prefix
@@ -57,63 +59,81 @@ def config_credentials():
 
 
 def config_runtime():
-    import tempfile
-    yaml_config = """
-    # Please refer to https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml for explanations on the meaning of each field.
-    api_version: 1
-    project_config:
-      project_name: 'feathr_getting_started'
-      required_environment_variables:
-        - 'REDIS_PASSWORD'
-        - 'AZURE_CLIENT_ID'
-        - 'AZURE_TENANT_ID'
-        - 'AZURE_CLIENT_SECRET'
-    offline_store:
-      adls:
-        adls_enabled: true
-      wasb:
-        wasb_enabled: true
-      s3:
-        s3_enabled: false
-        s3_endpoint: 's3.amazonaws.com'
-      jdbc:
-        jdbc_enabled: false
-        jdbc_database: 'feathrtestdb'
-        jdbc_table: 'feathrtesttable'
-      snowflake:
-        url: "dqllago-ol19457.snowflakecomputing.com"
-        user: "feathrintegration"
-        role: "ACCOUNTADMIN"
-    spark_config:
-      spark_cluster: 'azure_synapse'
-      spark_result_output_parts: '1'
-      azure_synapse:
-        dev_url: 'https://feathrazuretest3synapse.dev.azuresynapse.net'
-        pool_name: 'spark3'
-        workspace_dir: 'abfss://feathrazuretest3fs@feathrazuretest3storage.dfs.core.windows.net/feathr_getting_started'
-        executor_size: 'Small'
-        executor_num: 4
-        feathr_runtime_location: wasbs://public@azurefeathrstorage.blob.core.windows.net/feathr-assembly-LATEST.jar
-      databricks:
-        workspace_instance_url: 'https://adb-2474129336842816.16.azuredatabricks.net'
-        config_template: {'run_name':'','new_cluster':{'spark_version':'9.1.x-scala2.12','node_type_id':'Standard_D3_v2','num_workers':2,'spark_conf':{}},'libraries':[{'jar':''}],'spark_jar_task':{'main_class_name':'','parameters':['']}}
-        work_dir: 'dbfs:/feathr_getting_started'
-        feathr_runtime_location: https://azurefeathrstorage.blob.core.windows.net/public/feathr-assembly-LATEST.jar
-    online_store:
-      redis:
-        host: 'feathrazuretest3redis.redis.cache.windows.net'
-        port: 6380
-        ssl_enabled: True
-    feature_registry:
-      purview:
-        type_system_initialization: true
-        purview_name: 'feathrazuretest3-purview1'
-        delimiter: '__'
-    """
+    # Explanations on the meaning of each field can be found at
+    # https://github.com/linkedin/feathr/blob/main/feathr_project/feathrcli/data/feathr_user_workspace/feathr_config.yaml
+
+    project_config = """
+        api_version: 1
+        project_config:
+          project_name: 'feathr_getting_started'
+          required_environment_variables:
+            - 'REDIS_PASSWORD'
+            - 'AZURE_CLIENT_ID'
+            - 'AZURE_TENANT_ID'
+            - 'AZURE_CLIENT_SECRET'
+        """
+
+    spark_config = """
+        spark_config:
+          spark_cluster: 'azure_synapse'
+          spark_result_output_parts: '1'
+          azure_synapse:
+            dev_url: 'https://feathrazuretest3synapse.dev.azuresynapse.net'
+            pool_name: 'spark3'
+            workspace_dir: 'abfss://feathrazuretest3fs@feathrazuretest3storage.dfs.core.windows.net/feathr_getting_started'
+            executor_size: 'Small'
+            executor_num: 4
+            feathr_runtime_location: wasbs://feathrpqoplusdls.blob.core.windows.net/feathrpqoplusdls/feathr_project/feathr-assembly-0.6.0.jar
+            feathr_runtime_location_sas: xxx
+          databricks:
+            workspace_instance_url: 'https://adb-2474129336842816.16.azuredatabricks.net'
+            config_template: {'run_name':'','new_cluster':{'spark_version':'9.1.x-scala2.12','node_type_id':'Standard_D3_v2','num_workers':2,'spark_conf':{}},'libraries':[{'jar':''}],'spark_jar_task':{'main_class_name':'','parameters':['']}}
+            work_dir: 'dbfs:/feathr_getting_started'
+            feathr_runtime_location: https://azurefeathrstorage.blob.core.windows.net/public/feathr-assembly-LATEST.jar
+        """
+
+    offline_store_config = """
+        offline_store:
+          adls:
+            adls_enabled: true
+          wasb:
+            wasb_enabled: true
+          s3:
+            s3_enabled: false
+            s3_endpoint: 's3.amazonaws.com'
+          jdbc:
+            jdbc_enabled: false
+            jdbc_database: 'feathrtestdb'
+            jdbc_table: 'feathrtesttable'
+          snowflake:
+            url: "dqllago-ol19457.snowflakecomputing.com"
+            user: "feathrintegration"
+            role: "ACCOUNTADMIN"
+        """
+
+    online_store_config = """
+        online_store:
+          redis:
+            host: 'feathrazuretest3redis.redis.cache.windows.net'
+            port: 6380
+            ssl_enabled: True
+        """
+
+    feature_registry_config = """
+        feature_registry:
+          purview:
+            type_system_initialization: true
+            purview_name: 'feathrazuretest3-purview1'
+            delimiter: '__'
+        """
+
     tmp = tempfile.NamedTemporaryFile(mode='w', delete=False)
     with open(tmp.name, "w") as text_file:
-        text_file.write(yaml_config)
-
+        text_file.write(project_config)
+        text_file.write(spark_config)
+        text_file.write(offline_store_config)
+        text_file.write(online_store_config)
+        text_file.write(feature_registry_config)
     return tmp
 
 
@@ -141,7 +161,7 @@ def main():
     print("########################### \n## Config Feathr \n###########################")
     feathr_output = config_credentials()
     feathr_runtime_config = config_runtime()
-
+    
     # create feathr client
     client = FeathrClient(config_path=feathr_runtime_config.name, local_workspace_dir="/Users/ruiliu/Develop/tmp")
 
