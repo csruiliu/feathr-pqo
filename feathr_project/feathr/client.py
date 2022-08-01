@@ -161,9 +161,7 @@ class FeathrClient(object):
                     'spark_config', 'azure_synapse', 'executor_size'),
                 executors=self.envutils.get_environment_variable_with_default(
                     'spark_config', 'azure_synapse', 'executor_num'),
-                credential=self.credential,
-                sas_token=self.envutils.get_environment_variable_with_default(
-                    "spark_config", "azure_synapse", "feathr_runtime_location_sas")
+                credential=self.credential
             )
         elif self.spark_runtime == 'databricks':
             # Feathr is a spark-based application so the feathr jar compiled from source code will be used in the
@@ -536,7 +534,7 @@ class FeathrClient(object):
         But the job tags should just be used for metadata purpose.
         """
 
-        print("Feathr Job Jar Path: {}".format(self._FEATHR_JOB_JAR_PATH))
+        print("### Feathr Job Jar Path: {}".format(self._FEATHR_JOB_JAR_PATH))
 
         # submit the jars
         return self.feathr_spark_launcher.submit_feathr_job(

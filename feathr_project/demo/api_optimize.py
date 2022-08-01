@@ -83,8 +83,7 @@ def config_runtime():
             workspace_dir: 'abfss://feathrazuretest3fs@feathrazuretest3storage.dfs.core.windows.net/feathr_getting_started'
             executor_size: 'Small'
             executor_num: 4
-            feathr_runtime_location: https://feathrpqoplusdls.blob.core.windows.net/feathrpqoplusfs/feathr_project/feathr-assembly-0.6.0.jar
-            feathr_runtime_location_sas: sp=r&st=2022-08-01T21:17:54Z&se=2022-08-31T05:17:54Z&spr=https&sv=2021-06-08&sr=b&sig=gNhx0cXtpSpNSYmzLjfRhKjrNQ1BDmKyTEozn%2BKr8c4%3D
+            feathr_runtime_location: abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/feathr_project/feathr-assembly-0.6.0.jar
           databricks:
             workspace_instance_url: 'https://adb-2474129336842816.16.azuredatabricks.net'
             config_template: {'run_name':'','new_cluster':{'spark_version':'9.1.x-scala2.12','node_type_id':'Standard_D3_v2','num_workers':2,'spark_conf':{}},'libraries':[{'jar':''}],'spark_jar_task':{'main_class_name':'','parameters':['']}}
