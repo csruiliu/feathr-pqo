@@ -178,6 +178,8 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
     val rowBloomFilterThreshold = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ROW_BLOOMFILTER_MAX_THRESHOLD).toInt
     val joinFeatures = featureGroupings.values.flatten.toSeq.distinct
 
+    println("Join Features: ", joinFeatures)
+
     val (joinedDF, header) = {
       if (featureGroupings.isEmpty) {
         log.warn("Feature groupings from the join config is empty, returning the obs data without joining any features.")
@@ -234,7 +236,11 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
      */
     val updatedFeatureGroups = featureGroupsUpdater.updateFeatureGroups(featureGroups, keyTaggedFeatures)
 
+    println("Update Feature Groups: ", updatedFeatureGroups)
+
     val logicalPlan = logicalPlanner.getLogicalPlan(updatedFeatureGroups, keyTaggedFeatures)
+
+    println("logical Plan: ", logicalPlan)
 
     if (!sparkSession.sparkContext.isLocal) {
       // Check read authorization for all required features
