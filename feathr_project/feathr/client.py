@@ -533,6 +533,9 @@ class FeathrClient(object):
         (i.e. you can achieve the same goal by either using the job arguments/parameters vs. job configurations). 
         But the job tags should just be used for metadata purpose.
         """
+
+        print("Feathr Job Jar Path: {}".format(self._FEATHR_JOB_JAR_PATH))
+
         # submit the jars
         return self.feathr_spark_launcher.submit_feathr_job(
             job_name=self.project_name + '_feathr_feature_join_job',
