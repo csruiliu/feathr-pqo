@@ -161,7 +161,9 @@ class FeathrClient(object):
                     'spark_config', 'azure_synapse', 'executor_size'),
                 executors=self.envutils.get_environment_variable_with_default(
                     'spark_config', 'azure_synapse', 'executor_num'),
-                credential=self.credential
+                credential=self.credential,
+                sas_token=self.envutils.get_environment_variable_with_default(
+                    "spark_config", "azure_synapse", "feathr_runtime_location_sas")
             )
         elif self.spark_runtime == 'databricks':
             # Feathr is a spark-based application so the feathr jar compiled from source code will be used in the

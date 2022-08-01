@@ -56,7 +56,8 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
                  datalake_dir: str,
                  executor_size: str,
                  executors: int,
-                 credential=None):
+                 credential=None,
+                 sas_token=None):
         # use DeviceCodeCredential if EnvironmentCredential is not available
         self.credential = credential
         # use the same credential for authentication to avoid further login.
@@ -69,6 +70,7 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
         # Save Synapse parameters to retrieve driver log
         self._synapse_dev_url = synapse_dev_url
         self._pool_name = pool_name
+        self._sas_token = sas_token
 
     def upload_or_get_cloud_path(self, local_path_or_http_path: str):
         """
@@ -152,7 +154,7 @@ class _FeathrSynapseJobLauncher(SparkJobLauncher):
 
         if main_jar_path:
             # Now we have a main jar, either feathr or noop
-            if main_jar_path.startswith('abfs'):
+            if main_jar_path.startswith('abfs') or self._sas_token:
                 main_jar_cloud_path = main_jar_path
                 logger.info('Cloud path {} is used for running the job: {}', main_jar_path, job_name)
             else:
