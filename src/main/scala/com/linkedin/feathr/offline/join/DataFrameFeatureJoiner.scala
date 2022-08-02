@@ -237,7 +237,7 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       anchoredFeatureJoinStep.joinFeatures(requiredRegularFeatureAnchors, AnchorJoinStepInput(withWindowAggFeatureDF, anchorSourceAccessorMap))
 
     println("## SHOW withAllBasicAnchoredFeatureDF DataFrame")
-    withWindowAggFeatureDF.show(30)
+    withAllBasicAnchoredFeatureDF.show(30)
 
     // 5. If useSlickJoin, restore(join back) all observation fields before we evaluate post derived features, sequential join and passthrough
     // anchored features, as they might require other columns in the original observation data, while the current observation
@@ -254,7 +254,7 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
     // 6. Join Derived Features
     val derivedFeatureEvaluator = DerivedFeatureEvaluator(ss=ss, featureGroups=featureGroups, dataPathHandlers=dataPathHandlers)
     val derivedFeatureJoinStep = DerivedFeatureJoinStep(derivedFeatureEvaluator)
-    
+
     val FeatureDataFrameOutput(FeatureDataFrame(withDerivedFeatureDF, inferredDerivedFeatureTypes)) =
       derivedFeatureJoinStep.joinFeatures(allRequiredFeatures.filter {
         case ErasedEntityTaggedFeature(_, featureName) => featureGroups.allDerivedFeatures.contains(featureName)
