@@ -44,6 +44,7 @@ private[offline] class MultiStageJoinPlanner extends LogicalPlanner[MultiStageJo
     // Plan the join stages required to resolve all these features
     val (windowAggFeatureStages, joinStages, postJoinDerivedFeatures) = getJoinStages(featureGroups, allRequiredFeatures)
     log.info(s"joinStages: $joinStages")
+    log.info(s"windowAggFeatureStages: $windowAggFeatureStages")
 
     // Separate sliding window aggregation features from other features, for special processing later
     val (requiredWindowAggFeatures, requiredNonWindowAggFeatures) = allRequiredFeatures

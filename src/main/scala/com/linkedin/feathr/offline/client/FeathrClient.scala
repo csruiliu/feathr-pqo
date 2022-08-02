@@ -178,13 +178,14 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
     val rowBloomFilterThreshold = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ROW_BLOOMFILTER_MAX_THRESHOLD).toInt
     val joinFeatures = featureGroupings.values.flatten.toSeq.distinct
 
-    println("Join Features: ", joinFeatures)
+    println("## Join Features: ", joinFeatures)
 
     val (joinedDF, header) = {
       if (featureGroupings.isEmpty) {
         log.warn("Feature groupings from the join config is empty, returning the obs data without joining any features.")
         (obsData, new Header(Map.empty[TaggedFeatureName, FeatureInfo]))
       } else {
+        println("## Start joinFeaturesAsDF Function ")
         joinFeaturesAsDF(joinConfig, joinFeatures, obsData, Some(rowBloomFilterThreshold))
       }
     }

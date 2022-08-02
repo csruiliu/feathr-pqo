@@ -178,6 +178,8 @@ object FeatureJoinJob {
     val dataLoaderHandlers: List[DataLoaderHandler] = dataPathHandlers.map(_.dataLoaderHandler)
     val featureGroupings = joinConfig.featureGroupings
 
+    println("Feature Grouping: ", featureGroupings)
+
     /*
      * load FeathrClient and perform the Feature Join
      */
