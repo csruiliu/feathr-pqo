@@ -203,11 +203,9 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
 
     val anchorSourceAccessorMap = anchorToDataSourceMapper.getBasicAnchorDFMapForJoin(
       ss,
-      requiredRegularFeatureAnchors
-        .map(_.getFeatureName)
-        .toIndexedSeq
-        .map(featureGroups.allAnchoredFeatures),
-      failOnMissingPartition)
+      requiredRegularFeatureAnchors.map(_.getFeatureName).toIndexedSeq.map(featureGroups.allAnchoredFeatures),
+      failOnMissingPartition
+    )
 
     implicit val joinExecutionContext: JoinExecutionContext =
       JoinExecutionContext(ss, logicalPlan, featureGroups, bloomFilters, Some(saltedJoinFrequentItemDFs))
@@ -342,9 +340,11 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       failOnMissingPartition: Boolean,
       bloomFilters: Option[Map[Seq[Int], BloomFilter]],
       swaObsTime: Option[DateTimeInterval]): FeatureDataFrame = {
+
     if (windowAggFeatureStages.isEmpty) {
       offline.FeatureDataFrame(obsToJoinWithFeatures, Map())
-    } else {
+    }
+    else {
       val swaJoiner = new SlidingWindowAggregationJoiner(featureGroups.allWindowAggFeatures, anchorToDataSourceMapper)
       swaJoiner.joinWindowAggFeaturesAsDF(
         ss,
@@ -355,7 +355,8 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
         requiredWindowAggFeatures,
         bloomFilters,
         swaObsTime,
-        failOnMissingPartition)
+        failOnMissingPartition
+      )
     }
   }
 }

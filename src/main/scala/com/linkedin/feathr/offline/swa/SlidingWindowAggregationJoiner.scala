@@ -104,16 +104,19 @@ private[offline] class SlidingWindowAggregationJoiner(
     // get time range of observation data
     // join windowAggAnchor DataFrames with observation data
     var contextDF: DataFrame = obsDF
+
+    println("## SHOW contextDF DataFrame")
+    contextDF.show(30)
+
     // SWA Observation time range should be computed in PreProcessObservation step
     val swaObsTimeRange = swaObsTimeOpt.get
 
     println(s"## SwaObsTimeRange: $swaObsTimeRange")
 
-    // get a Map from each source to a list of all anchors based on this source
-    val windowAggSourceToAnchor = windowAggAnchors
-    // same source with different key extractor might generate different views, e.g, key extractor may 'explode' the dataframe
+    // Get a Map from each source to a list of all anchors based on this source
+    // Same source with different key extractor might generate different views, e.g, key extractor may 'explode' the dataframe
     // which would result in more rows, so we need to group by source and keyExtractor
-      .map(anchor => {
+    val windowAggSourceToAnchor = windowAggAnchors.map(anchor => {
         val featureNames = PreprocessedDataFrameManager.getPreprocessingUniquenessForAnchor(anchor)
         ((anchor.source, anchor.featureAnchor.sourceKeyExtractor.toString(), featureNames), anchor)
       })
@@ -127,32 +130,40 @@ private[offline] class SlidingWindowAggregationJoiner(
     // Then we load the source only once.
     // Then we create a map from each *anchor* to the loaded source DataFrame.
     val windowAggAnchorDFMap = windowAggSourceToAnchor.flatMap({
-      case (sourceWithKeyExtractor, anchors) =>
-        val maxDurationPerSource = anchors
-          .map(SlidingWindowFeatureUtils.getMaxWindowDurationInAnchor(_, windowAggFeatureNames))
-          .max
-          .minusDays(60)
-        // log.info(s"Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
+      case (sourceWithKeyExtractor, anchors) => val maxDurationPerSource = anchors
+        .map(SlidingWindowFeatureUtils.getMaxWindowDurationInAnchor(_, windowAggFeatureNames))
+        .max
+        .minusDays(60)
+
         println(s"## Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
         // use preprocessed DataFrame if it exist. Otherwise use the original source DataFrame.
         // there are might be duplicates: Vector(f_location_avg_fare, f_location_max_fare, f_location_avg_fare, f_location_max_fare)
         val res = anchors.flatMap(x => x.featureAnchor.features)
         val featureNames = res.toSet.toSeq.sorted.mkString(",")
+
+        println(s"## FeatureNames: $featureNames")
+
         val preprocessedDf = PreprocessedDataFrameManager.preprocessedDfMap.get(featureNames)
-        val originalSourceDf =
-          anchorToDataSourceMapper
-            .getWindowAggAnchorDFMapForJoin(
-              ss,
-              sourceWithKeyExtractor._1,
-              swaObsTimeRange,
-              maxDurationPerSource,
-              featuresToDelayImmutableMap.values.toArray,
-              failOnMissingPartition)
+
+        val originalSourceDf = anchorToDataSourceMapper.getWindowAggAnchorDFMapForJoin(
+          ss,
+          sourceWithKeyExtractor._1,
+          swaObsTimeRange,
+          maxDurationPerSource,
+          featuresToDelayImmutableMap.values.toArray,
+          failOnMissingPartition
+        )
+
+        println("## SHOW OriginalSourceDf DataFrame")
+        originalSourceDf.show(30)
 
         val sourceDF: DataFrame = preprocessedDf match {
           case Some(existDf) => existDf
           case None => originalSourceDf
         }
+
+        println("## SHOW sourceDF DataFrame")
+        sourceDF.show(30)
 
         // all the anchors here have same key sourcekey extractor, so we just use the first one to generate key column and share
         val withKeyDF = anchors.head.featureAnchor.sourceKeyExtractor match {
@@ -162,6 +173,9 @@ private[offline] class SlidingWindowAggregationJoiner(
           case keyExtractor: SQLSourceKeyExtractor => keyExtractor.appendKeyColumns(sourceDF, false)
           case keyExtractor => keyExtractor.appendKeyColumns(sourceDF)
         }
+
+        println("## withKeyDF")
+        withKeyDF.show(30)
 
         anchors.map(anchor => (anchor, withKeyDF))
     })
