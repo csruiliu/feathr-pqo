@@ -182,6 +182,8 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
         featureGroups.allAnchoredFeatures.contains(featureName) && !featureGroups.allPassthroughFeatures.contains(featureName)
     }.distinct
 
+    println(s"RequiredRegularFeatureAnchors: $requiredRegularFeatureAnchors")
+
     val anchorSourceAccessorMap = anchorToDataSourceMapper.getBasicAnchorDFMapForJoin(
       ss,
       requiredRegularFeatureAnchors
@@ -209,6 +211,7 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
           IdentityJoinKeyColumnAppender,
           SparkJoinWithJoinCondition(EqualityJoinConditionBuilder))
       }
+
     val FeatureDataFrameOutput(FeatureDataFrame(withAllBasicAnchoredFeatureDF, inferredBasicAnchoredFeatureTypes)) =
       anchoredFeatureJoinStep.joinFeatures(requiredRegularFeatureAnchors, AnchorJoinStepInput(withWindowAggFeatureDF, anchorSourceAccessorMap))
     // 5. If useSlickJoin, restore(join back) all observation fields before we evaluate post derived features, sequential join and passthrough

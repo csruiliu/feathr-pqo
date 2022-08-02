@@ -90,7 +90,7 @@ object FeatureJoinJob {
   def stringifyFeatureNames(nameSet: Set[String]): String = nameSet.toSeq.sorted.toArray.mkString("\n\t")
 
   def hdfsFileReader(ss: SparkSession, path: String): String = {
-    print("ss.sparkContext.textFile(path),", path)
+    println(s"## ss.sparkContext.textFile(path): $path")
     ss.sparkContext.textFile(path).collect.mkString("\n")
   }
 
@@ -99,8 +99,7 @@ object FeatureJoinJob {
                                  jobContext: FeathrJoinJobContext,
                                  dataLoaderHandlers: List[DataLoaderHandler]): Unit = {
     AclCheckUtils.checkWriteAuthorization(hadoopConf, jobContext.jobJoinContext.outputPath) match {
-      case Failure(e) =>
-        throw new FeathrDataOutputException(ErrorLabel.FEATHR_USER_ERROR, s"No write permission for output path ${jobContext.jobJoinContext.outputPath}.", e)
+      case Failure(e) => throw new FeathrDataOutputException(ErrorLabel.FEATHR_USER_ERROR, s"No write permission for output path ${jobContext.jobJoinContext.outputPath}.", e)
       case Success(_) => log.debug("Checked write authorization on output path: " + jobContext.jobJoinContext.outputPath)
     }
     jobContext.jobJoinContext.inputData.map(inputData => {
@@ -182,7 +181,7 @@ object FeatureJoinJob {
       jobContext: JoinJobContext,
       dataPathHandlers: List[DataPathHandler],
       localTestConfig: Option[LocalTestConfig] = None): (Option[RDD[GenericRecord]], Option[DataFrame]) = {
-    val sparkConf = ss.sparkContext.getConf
+
     val dataLoaderHandlers: List[DataLoaderHandler] = dataPathHandlers.map(_.dataLoaderHandler)
     val featureGroupings = joinConfig.featureGroupings
 
@@ -191,6 +190,10 @@ object FeatureJoinJob {
      */
     val failOnMissing = FeathrUtils.getFeathrJobParam(ss, FeathrUtils.FAIL_ON_MISSING_PARTITION).toBoolean
     val observationsDF = SourceUtils.loadObservationAsDF(ss, hadoopConf, jobContext.inputData.get, dataLoaderHandlers, failOnMissing)
+
+    println("## SHOW Observation DF:")
+
+    observationsDF.show()
 
     val (joinedDF, _) = getFeathrClientAndJoinFeatures(ss, observationsDF, featureGroupings, joinConfig, jobContext, dataPathHandlers, localTestConfig)
 
@@ -301,10 +304,10 @@ object FeatureJoinJob {
    *         for this anchor source. For example, anchor1 -> f1, f2, anchor2 -> f3, f4. Then the result is
    *         Map("f1,f2" -> df1, "f3,f4" -> df2).
    */
-  def loadSourceDataframe(args: Array[String], featureNamesInAnchorSet: java.util.Set[String]): java.util.Map[String, DataFrame] = {
-    logger.info("FeatureJoinJob args are: " + args)
-    logger.info("Feature join job: loadDataframe")
-    logger.info(featureNamesInAnchorSet)
+  def loadSourceDataframe(args: Array[String],
+                          featureNamesInAnchorSet: java.util.Set[String]): java.util.Map[String, DataFrame] = {
+    println(s"FeatureJoinJob args are: ${args.mkString}")
+    println(s"Feature join job [loadDataframe]: $featureNamesInAnchorSet")
     val feathrJoinPreparationInfo = prepareSparkSession(args)
     val sparkSession = feathrJoinPreparationInfo.sparkSession
     val hadoopConf = feathrJoinPreparationInfo.hadoopConf
@@ -345,8 +348,10 @@ object FeatureJoinJob {
   }
 
   def main(args: Array[String]) {
-    logger.info("FeatureJoinJob args are: " + args)
+    println(s"FeatureJoinJob args are: ${args.mkString}")
     val feathrJoinPreparationInfo = prepareSparkSession(args)
+
+    println(s"feathrJoinPreparationInfo: ${feathrJoinPreparationInfo.toString}")
 
     run(feathrJoinPreparationInfo.sparkSession, feathrJoinPreparationInfo.hadoopConf, feathrJoinPreparationInfo.jobContext, List()) //TODO: accept handlers instead of empty List
   }
