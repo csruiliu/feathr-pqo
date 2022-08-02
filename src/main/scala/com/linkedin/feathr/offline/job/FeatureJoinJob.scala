@@ -64,9 +64,14 @@ object FeatureJoinJob {
 
   val log: Logger = Logger.getLogger(getClass)
 
-  def run(ss: SparkSession, hadoopConf: Configuration, jobContext: FeathrJoinJobContext, dataPathHandlers: List[DataPathHandler]): Unit = {
+  def run(ss: SparkSession,
+          hadoopConf: Configuration,
+          jobContext: FeathrJoinJobContext,
+          dataPathHandlers: List[DataPathHandler]): Unit = {
     val dataLoaderHandlers: List[DataLoaderHandler] = dataPathHandlers.map(_.dataLoaderHandler)
     val joinConfig = FeatureJoinConfig.parseJoinConfig(hdfsFileReader(ss, jobContext.joinConfig))
+
+    println(s"## Join Config: $joinConfig")
 
     // check read authorization for observation data, and write authorization for output path
     checkAuthorization(ss, hadoopConf, jobContext, dataLoaderHandlers)
@@ -89,7 +94,10 @@ object FeatureJoinJob {
     ss.sparkContext.textFile(path).collect.mkString("\n")
   }
 
-  private def checkAuthorization(ss: SparkSession, hadoopConf: Configuration, jobContext: FeathrJoinJobContext, dataLoaderHandlers: List[DataLoaderHandler]): Unit = {
+  private def checkAuthorization(ss: SparkSession,
+                                 hadoopConf: Configuration,
+                                 jobContext: FeathrJoinJobContext,
+                                 dataLoaderHandlers: List[DataLoaderHandler]): Unit = {
     AclCheckUtils.checkWriteAuthorization(hadoopConf, jobContext.jobJoinContext.outputPath) match {
       case Failure(e) =>
         throw new FeathrDataOutputException(ErrorLabel.FEATHR_USER_ERROR, s"No write permission for output path ${jobContext.jobJoinContext.outputPath}.", e)

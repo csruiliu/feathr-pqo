@@ -171,11 +171,9 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
 
     val featureGroupings = joinConfig.featureGroupings
 
-    println(s"## featureGroupings: $featureGroupings")
-
-    log.info(s"Join job context: ${jobContext})")
-    log.info(s"joinConfig: ${joinConfig}")
-    log.info(s"featureGroupings passed in: ${featureGroupings}")
+    println(s"Join job context: ${jobContext})")
+    println(s"joinConfig: ${joinConfig}")
+    println(s"featureGroupings passed in: ${featureGroupings.values}")
 
     val rowBloomFilterThreshold = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ROW_BLOOMFILTER_MAX_THRESHOLD).toInt
     val joinFeatures = featureGroupings.values.flatten.toSeq.distinct

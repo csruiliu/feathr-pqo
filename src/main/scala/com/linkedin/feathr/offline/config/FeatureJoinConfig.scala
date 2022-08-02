@@ -42,6 +42,7 @@ case class FeatureJoinConfig(groups: Map[String, Seq[KeyedFeatureList]], @JsonPr
         featureList map (featureRef => JoiningFeatureParams(key, featureRef, dateParam, timeDelay, featureAlias))
     }
   } yield featureGroupName -> stringTaggedFeatureRefs
+
   val featuresToTimeDelayMap = for {
     (_, seqOfKeyedFeatureList) <- groups
     KeyedFeatureList(_, featureList, _, _, _, _, timeDelay, featureAlias) <- seqOfKeyedFeatureList

@@ -95,7 +95,7 @@ private[offline] class SlidingWindowAggregationJoiner(
         simulatedDelay.map(SlidingWindowFeatureUtils.DEFAULT_TIME_DELAY -> _).toMap
 
     // find the window aggregate feature anchor configs
-    val windowAggFeatureNames = requiredWindowAggFeatures.map(_.getFeatureName.replace("90","30")).toIndexedSeq
+    val windowAggFeatureNames = requiredWindowAggFeatures.map(_.getFeatureName).toIndexedSeq
     val windowAggAnchors = windowAggFeatureNames.map(allWindowAggFeatures)
 
     println(s"## WindowAggFeatureNames: $windowAggFeatureNames")
@@ -131,6 +131,7 @@ private[offline] class SlidingWindowAggregationJoiner(
         val maxDurationPerSource = anchors
           .map(SlidingWindowFeatureUtils.getMaxWindowDurationInAnchor(_, windowAggFeatureNames))
           .max
+          .minusDays(60)
         // log.info(s"Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
         println(s"## Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
         // use preprocessed DataFrame if it exist. Otherwise use the original source DataFrame.
