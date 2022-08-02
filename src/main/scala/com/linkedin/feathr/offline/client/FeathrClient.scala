@@ -153,9 +153,11 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
    * @return A tuple of joined observation and feature data as a DataFrame, and the header. The header provides a
    *         mapping from the feature name to the column name in the dataframe.
    */
-  private[offline] def doJoinObsAndFeatures(joinConfig: FeatureJoinConfig, jobContext: JoinJobContext, obsData: DataFrame): (DataFrame, Header) = {
-    log.info("All anchored feature names (sorted):\n\t" + stringifyFeatureNames(allAnchoredFeatures.keySet))
-    log.info("All derived feature names (sorted):\n\t" + stringifyFeatureNames(allDerivedFeatures.keySet))
+  private[offline] def doJoinObsAndFeatures(joinConfig: FeatureJoinConfig,
+                                            jobContext: JoinJobContext,
+                                            obsData: DataFrame): (DataFrame, Header) = {
+    println("All anchored feature names (sorted):\n\t" + stringifyFeatureNames(allAnchoredFeatures.keySet))
+    println("All derived feature names (sorted):\n\t" + stringifyFeatureNames(allDerivedFeatures.keySet))
     prepareExecuteEnv()
     val enableCheckPoint = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ENABLE_CHECKPOINT).toBoolean
     val checkpointDir = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.CHECKPOINT_OUTPUT_PATH)
@@ -171,9 +173,9 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
 
     val featureGroupings = joinConfig.featureGroupings
 
-    println(s"Join job context: ${jobContext})")
-    println(s"joinConfig: ${joinConfig}")
-    println(s"featureGroupings passed in: ${featureGroupings.values}")
+    println(s"## Join job context: ${jobContext})")
+    println(s"## joinConfig: ${joinConfig}")
+    println(s"## featureGroupings passed in: ${featureGroupings.values}")
 
     val rowBloomFilterThreshold = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ROW_BLOOMFILTER_MAX_THRESHOLD).toInt
     val joinFeatures = featureGroupings.values.flatten.toSeq.distinct
@@ -185,7 +187,7 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
         log.warn("Feature groupings from the join config is empty, returning the obs data without joining any features.")
         (obsData, new Header(Map.empty[TaggedFeatureName, FeatureInfo]))
       } else {
-        println("## Start joinFeaturesAsDF Function ")
+        println("## Start joinFeaturesAsDF Function")
         joinFeaturesAsDF(joinConfig, joinFeatures, obsData, Some(rowBloomFilterThreshold))
       }
     }
@@ -217,11 +219,10 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
    * @param rowBloomFilterThreshold
    * @return pair of (joined dataframe, header)
    */
-  private[offline] def joinFeaturesAsDF(
-      joinConfig: FeatureJoinConfig,
-      keyTaggedFeatures: Seq[JoiningFeatureParams],
-      left: DataFrame,
-      rowBloomFilterThreshold: Option[Int] = None): (DataFrame, Header) = {
+  private[offline] def joinFeaturesAsDF(joinConfig: FeatureJoinConfig,
+                                        keyTaggedFeatures: Seq[JoiningFeatureParams],
+                                        left: DataFrame,
+                                        rowBloomFilterThreshold: Option[Int] = None): (DataFrame, Header) = {
     if (left.head(1).isEmpty) {
       log.info("Observation is empty")
       return (left, new Header(Map.empty[TaggedFeatureName, FeatureInfo]))
@@ -237,11 +238,11 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
      */
     val updatedFeatureGroups = featureGroupsUpdater.updateFeatureGroups(featureGroups, keyTaggedFeatures)
 
-    println(s"Update Feature Groups: $updatedFeatureGroups")
+    println(s"## Update Feature Groups: $updatedFeatureGroups")
 
     val logicalPlan = logicalPlanner.getLogicalPlan(updatedFeatureGroups, keyTaggedFeatures)
 
-    println(s"logical Plan: $logicalPlan")
+    println(s"## logical Plan: $logicalPlan")
 
     if (!sparkSession.sparkContext.isLocal) {
       // Check read authorization for all required features

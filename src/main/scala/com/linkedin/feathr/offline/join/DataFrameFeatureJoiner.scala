@@ -137,10 +137,13 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
     val allJoinStages = (windowAggFeatureStages ++ joinStages).distinct
 
     val useSaltedJoin = FeathrUtils.getFeathrJobParam(ss.sparkContext.getConf, FeathrUtils.ENABLE_SALTED_JOIN).toBoolean
+
     // Slick join and salted join have different JoinKeyAppenders which handle join key differently
     // Currently, we cannot use both at the same time.
     val useSlickJoin = FeathrUtils.getFeathrJobParam(ss.sparkContext.getConf, FeathrUtils.ENABLE_SLICK_JOIN).toBoolean && !useSaltedJoin
+
     val failOnMissingPartition = FeathrUtils.getFeathrJobParam(ss.sparkContext.getConf, FeathrUtils.FAIL_ON_MISSING_PARTITION).toBoolean
+
     val saltedJoinParameters =
       if (useSaltedJoin) {
         val estimatorType = FrequentItemEstimatorType.withName(FeathrUtils.getFeathrJobParam(ss.sparkContext.getConf, FeathrUtils.SALTED_JOIN_FREQ_ITEM_ESTIMATOR))
@@ -150,13 +153,20 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       } else {
         None
       }
+
     // 1. Calculate anchored pass through first, as slick join will not be able to preserve the columns
     //    they might need in the observation data.
-    val FeatureDataFrame(withPassthroughFeatureDF, anchoredPassthroughFeatureTypes) =
-      joinAnchoredPassthroughFeatures(ss, observationDF, featureGroups)
+    val FeatureDataFrame(withPassthroughFeatureDF, anchoredPassthroughFeatureTypes) = joinAnchoredPassthroughFeatures(ss, observationDF, featureGroups)
 
-    val allRequestAnchoredPassthroughFeatures =
-      featureGroups.allPassthroughFeatures.filter(feature => allRequestedFeatures.map(_.getFeatureName).contains(feature._1)).keySet
+    println(s"## FeatureGroups.allPassthroughFeatures: ${featureGroups.allPassthroughFeatures}")
+
+    println(s"## AllRequestedFeatures: ${allRequestedFeatures}")
+
+    val allRequestAnchoredPassthroughFeatures = featureGroups.allPassthroughFeatures.filter(feature => allRequestedFeatures.map(_.getFeatureName).contains(feature._1)).keySet
+
+    println("## SHOW WithPassthroughFeatureDF DataFrame")
+    withPassthroughFeatureDF.show()
+
     val passthroughFeatureColumns = withPassthroughFeatureDF.columns.diff(observationDF.columns)
 
     // 2. Preprocess observation data, e.g. trims the observation to do slick join, i.e. trims the observation to roughly
@@ -171,6 +181,10 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
         rowBloomFilterThreshold,
         saltedJoinParameters,
         passthroughFeatureColumns)
+
+    println("## SHOW WithJoinKeyAndUidObs DataFrame")
+    withJoinKeyAndUidObs.show()
+
     val extraSlickColumns2Remove = withJoinKeyAndUidObs.columns.diff(observationDF.columns).diff(passthroughFeatureColumns)
     val obsToJoinWithFeatures = if (useSlickJoin) withJoinKeyAndUidObs else withPassthroughFeatureDF
 

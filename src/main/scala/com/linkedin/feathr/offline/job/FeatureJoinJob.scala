@@ -191,8 +191,7 @@ object FeatureJoinJob {
     val failOnMissing = FeathrUtils.getFeathrJobParam(ss, FeathrUtils.FAIL_ON_MISSING_PARTITION).toBoolean
     val observationsDF = SourceUtils.loadObservationAsDF(ss, hadoopConf, jobContext.inputData.get, dataLoaderHandlers, failOnMissing)
 
-    println("## SHOW Observation DF:")
-
+    println("## SHOW Observation DataFrame:")
     observationsDF.show()
 
     val (joinedDF, _) = getFeathrClientAndJoinFeatures(ss, observationsDF, featureGroupings, joinConfig, jobContext, dataPathHandlers, localTestConfig)
