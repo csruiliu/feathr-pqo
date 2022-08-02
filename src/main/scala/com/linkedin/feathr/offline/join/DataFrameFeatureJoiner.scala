@@ -188,6 +188,9 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
     val extraSlickColumns2Remove = withJoinKeyAndUidObs.columns.diff(observationDF.columns).diff(passthroughFeatureColumns)
     val obsToJoinWithFeatures = if (useSlickJoin) withJoinKeyAndUidObs else withPassthroughFeatureDF
 
+    println("## SHOW ObsToJoinWithFeatures DataFrame")
+    obsToJoinWithFeatures.show(30)
+
     /*
      * Get source accessor for all required, non-SWA anchored features.
      */
@@ -196,7 +199,7 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
         featureGroups.allAnchoredFeatures.contains(featureName) && !featureGroups.allPassthroughFeatures.contains(featureName)
     }.distinct
 
-    println(s"RequiredRegularFeatureAnchors: $requiredRegularFeatureAnchors")
+    println(s"## RequiredRegularFeatureAnchors: $requiredRegularFeatureAnchors")
 
     val anchorSourceAccessorMap = anchorToDataSourceMapper.getBasicAnchorDFMapForJoin(
       ss,
@@ -208,9 +211,13 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
 
     implicit val joinExecutionContext: JoinExecutionContext =
       JoinExecutionContext(ss, logicalPlan, featureGroups, bloomFilters, Some(saltedJoinFrequentItemDFs))
+
     // 3. Join sliding window aggregation features
     val FeatureDataFrame(withWindowAggFeatureDF, inferredSWAFeatureTypes) =
       joinSWAFeatures(ss, obsToJoinWithFeatures, joinConfig, featureGroups, failOnMissingPartition, bloomFilters, swaObsTime)
+
+    println("## SHOW WithWindowAggFeatureDF DataFrame")
+    withWindowAggFeatureDF.show(30)
 
     // 4. Join basic anchored features
     val anchoredFeatureJoinStep =
@@ -228,6 +235,10 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
 
     val FeatureDataFrameOutput(FeatureDataFrame(withAllBasicAnchoredFeatureDF, inferredBasicAnchoredFeatureTypes)) =
       anchoredFeatureJoinStep.joinFeatures(requiredRegularFeatureAnchors, AnchorJoinStepInput(withWindowAggFeatureDF, anchorSourceAccessorMap))
+
+    println("## SHOW withAllBasicAnchoredFeatureDF DataFrame")
+    withWindowAggFeatureDF.show(30)
+
     // 5. If useSlickJoin, restore(join back) all observation fields before we evaluate post derived features, sequential join and passthrough
     // anchored features, as they might require other columns in the original observation data, while the current observation
     // dataset does not have these fields (were removed in the preProcessObservation)
@@ -243,10 +254,14 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
     // 6. Join Derived Features
     val derivedFeatureEvaluator = DerivedFeatureEvaluator(ss=ss, featureGroups=featureGroups, dataPathHandlers=dataPathHandlers)
     val derivedFeatureJoinStep = DerivedFeatureJoinStep(derivedFeatureEvaluator)
+    
     val FeatureDataFrameOutput(FeatureDataFrame(withDerivedFeatureDF, inferredDerivedFeatureTypes)) =
       derivedFeatureJoinStep.joinFeatures(allRequiredFeatures.filter {
         case ErasedEntityTaggedFeature(_, featureName) => featureGroups.allDerivedFeatures.contains(featureName)
       }, BaseJoinStepInput(withSlickJoinedDF))
+
+    println("## SHOW withDerivedFeatureDF DataFrame")
+    withDerivedFeatureDF.show(30)
 
     // Create a set with only the combination of keyTags and the feature name. This will uniquely determine the column name.
     val taggedFeatureSet = keyTaggedFeatures
