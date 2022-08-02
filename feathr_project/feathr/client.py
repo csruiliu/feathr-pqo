@@ -542,7 +542,7 @@ class FeathrClient(object):
             main_jar_path=self._FEATHR_JOB_JAR_PATH,
             python_files=cloud_udf_paths,
             job_tags=job_tags,
-            main_class_name='com.linkedin.feathr.offline.job.FeatureJoinJobPQO',
+            main_class_name='com.linkedin.feathr.offline.job.FeatureJoinJob',
             arguments=[
                 '--join-config', self.feathr_spark_launcher.upload_or_get_cloud_path(
                     feature_join_job_params.join_config_path),

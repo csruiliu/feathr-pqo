@@ -171,6 +171,8 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
 
     val featureGroupings = joinConfig.featureGroupings
 
+    println(s"## featureGroupings: $featureGroupings")
+
     log.info(s"Join job context: ${jobContext})")
     log.info(s"joinConfig: ${joinConfig}")
     log.info(s"featureGroupings passed in: ${featureGroupings}")
@@ -178,7 +180,7 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
     val rowBloomFilterThreshold = FeathrUtils.getFeathrJobParam(sparkSession, FeathrUtils.ROW_BLOOMFILTER_MAX_THRESHOLD).toInt
     val joinFeatures = featureGroupings.values.flatten.toSeq.distinct
 
-    println("## Join Features: ", joinFeatures)
+    println(s"## Join Features: $joinFeatures")
 
     val (joinedDF, header) = {
       if (featureGroupings.isEmpty) {
@@ -237,11 +239,11 @@ class FeathrClient private[offline] (sparkSession: SparkSession, featureGroups: 
      */
     val updatedFeatureGroups = featureGroupsUpdater.updateFeatureGroups(featureGroups, keyTaggedFeatures)
 
-    println("Update Feature Groups: ", updatedFeatureGroups)
+    println(s"Update Feature Groups: $updatedFeatureGroups")
 
     val logicalPlan = logicalPlanner.getLogicalPlan(updatedFeatureGroups, keyTaggedFeatures)
 
-    println("logical Plan: ", logicalPlan)
+    println(s"logical Plan: $logicalPlan")
 
     if (!sparkSession.sparkContext.isLocal) {
       // Check read authorization for all required features
