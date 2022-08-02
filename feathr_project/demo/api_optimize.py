@@ -275,6 +275,9 @@ def main():
 
     client.wait_job_to_finish(timeout_sec=1000)
 
+    df_res = download_result_df(client)
+    df_res.to_csv("join_all.csv")
+
 
 if __name__ == "__main__":
     main()
