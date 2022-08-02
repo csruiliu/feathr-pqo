@@ -126,13 +126,13 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
     // 0. Before the join starts, log the key information related to the join
 
     println("=========== Key infos for Feathr FeatureJoin ==========")
-    println(s"user requested features: $keyTaggedFeatures")
-    println(s"keyTag mapping: ${keyTagIntsToStrings.zipWithIndex}")
-    println(s"resolved dependencies list: $allRequiredFeatures")
-    println(s"join stages: $joinStages, post-join derived features: $postJoinDerivedFeatures")
-    println(s"windowAggFeatures that needs to be computed: $requiredWindowAggFeatures")
-    println(s"non-windowAggFeatures that needs to be computed: $requiredNonWindowAggFeatures")
-    println(s"seqJoin features that needs to be computed: $requestedSeqJoinFeatures")
+    println(s"## user requested features: $keyTaggedFeatures")
+    println(s"## keyTag mapping: ${keyTagIntsToStrings.zipWithIndex}")
+    println(s"## resolved dependencies list: $allRequiredFeatures")
+    println(s"## join stages: $joinStages, post-join derived features: $postJoinDerivedFeatures")
+    println(s"## windowAggFeatures that needs to be computed: $requiredWindowAggFeatures")
+    println(s"## non-windowAggFeatures that needs to be computed: $requiredNonWindowAggFeatures")
+    println(s"## seqJoin features that needs to be computed: $requestedSeqJoinFeatures")
 
     val allJoinStages = (windowAggFeatureStages ++ joinStages).distinct
 
