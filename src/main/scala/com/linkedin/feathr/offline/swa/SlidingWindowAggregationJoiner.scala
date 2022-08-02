@@ -79,6 +79,7 @@ private[offline] class SlidingWindowAggregationJoiner(
     val enableCheckPoint = FeathrUtils.getFeathrJobParam(ss, FeathrUtils.ENABLE_CHECKPOINT).toBoolean
 
     val timeWindowJoinSettings = joinConfigSettings.get.joinTimeSetting.get
+    println(s"TimeWindowJoinSettings: $timeWindowJoinSettings")
     val simulatedDelay = timeWindowJoinSettings.simulateTimeDelay
 
     if (simulatedDelay.isEmpty && !joinConfig.featuresToTimeDelayMap.isEmpty) {
@@ -96,11 +97,16 @@ private[offline] class SlidingWindowAggregationJoiner(
     val windowAggFeatureNames = requiredWindowAggFeatures.map(_.getFeatureName).toIndexedSeq
     val windowAggAnchors = windowAggFeatureNames.map(allWindowAggFeatures)
 
+    println(s"## WindowAggFeatureNames: $windowAggFeatureNames")
+    println(s"## WindowAggAnchors: $windowAggAnchors")
+
     // get time range of observation data
     // join windowAggAnchor DataFrames with observation data
     var contextDF: DataFrame = obsDF
     // SWA Observation time range should be computed in PreProcessObservation step
     val swaObsTimeRange = swaObsTimeOpt.get
+
+    println(s"## SwaObsTimeRange: $swaObsTimeRange")
 
     // get a Map from each source to a list of all anchors based on this source
     val windowAggSourceToAnchor = windowAggAnchors
@@ -124,8 +130,8 @@ private[offline] class SlidingWindowAggregationJoiner(
         val maxDurationPerSource = anchors
           .map(SlidingWindowFeatureUtils.getMaxWindowDurationInAnchor(_, windowAggFeatureNames))
           .max
-        log.info(s"Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
-
+        // log.info(s"Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
+        println(s"Selected max window duration $maxDurationPerSource across all anchors for source ${sourceWithKeyExtractor._1.path}")
         // use preprocessed DataFrame if it exist. Otherwise use the original source DataFrame.
         // there are might be duplicates: Vector(f_location_avg_fare, f_location_max_fare, f_location_avg_fare, f_location_max_fare)
         val res = anchors.flatMap(x => x.featureAnchor.features)
