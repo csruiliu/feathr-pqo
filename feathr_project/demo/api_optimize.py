@@ -168,13 +168,13 @@ def main():
     # datasets path
     ####################
     user_observation_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
-                              "feathr_project/user_observation_mock_data.csv")
+                              "feathr_dataset/user_observation_mock_data.csv")
 
     user_profile_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
-                          "feathr_project/user_profile_mock_data.csv")
+                          "feathr_dataset/user_profile_mock_data.csv")
 
     user_purchase_history_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
-                                   "feathr_project/user_purchase_history_mock_data.csv")
+                                   "feathr_dataset/user_purchase_history_mock_data.csv")
 
     ####################################################
     # define anchored features using user profile table
@@ -208,7 +208,7 @@ def main():
                                                  transform="number_of_credit_cards > 0")
 
     user_profile_source = HdfsSource(name="user_profile_data",
-                                     path=user_profile_wasbs,
+                                     path=user_profile_abfss,
                                      preprocessing=feathr_udf_preprocessing)
 
     anchored_features = FeatureAnchor(name="anchored_features",
@@ -232,7 +232,7 @@ def main():
 
     # we need event_timestamp_column since we need to decide if the purchase happens within the "time window"
     purchase_history_source = HdfsSource(name="purchase_history_data",
-                                         path=user_purchase_history_wasbs,
+                                         path=user_purchase_history_abfss,
                                          event_timestamp_column="purchase_date",
                                          timestamp_format="yyyy-MM-dd")
 
@@ -262,7 +262,7 @@ def main():
                                                "feature_user_total_purchase_in_90days"],
                                  key=user_id)
 
-    settings = ObservationSettings(observation_path=user_observation_wasbs,
+    settings = ObservationSettings(observation_path=user_observation_abfss,
                                    event_timestamp_column="event_timestamp",
                                    timestamp_format="yyyy-MM-dd")
 
