@@ -167,17 +167,14 @@ def main():
     ####################
     # datasets path
     ####################
-    user_observation_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
-                              "sample_data/product_recommendation_sample/"
-                              "user_observation_mock_data.csv")
+    user_observation_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
+                              "feathr_project/user_observation_mock_data.csv")
 
-    user_profile_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
-                          "sample_data/product_recommendation_sample/"
-                          "user_profile_mock_data.csv")
+    user_profile_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
+                          "feathr_project/user_profile_mock_data.csv")
 
-    user_purchase_history_wasbs = ("wasbs://public@azurefeathrstorage.blob.core.windows.net/"
-                                   "sample_data/product_recommendation_sample/"
-                                   "user_purchase_history_mock_data.csv")
+    user_purchase_history_abfss = ("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/"
+                                   "feathr_project/user_purchase_history_mock_data.csv")
 
     ####################################################
     # define anchored features using user profile table

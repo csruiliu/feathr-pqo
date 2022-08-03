@@ -317,6 +317,9 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       log.debug(s"joinFeaturesAsDF returned:")
       finalDF.show(false)
     }
+
+    val materializedView = ss.read.csv("")
+
     (finalDF, header)
   }
 

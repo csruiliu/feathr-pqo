@@ -177,12 +177,13 @@ private[offline] class SlidingWindowAggregationJoiner(
         println("## SHOW withKeyDF")
         withKeyDF.show(30)
 
-        val withKeyFilterDF = withKeyDF.filter(withKeyDF("purchase_date").leq(lit("2021-01-01")))
+        // Hardcode the filtering before actually join for hacky demo
+        val withKeyFilterDF = withKeyDF.filter(withKeyDF("purchase_date").geq(lit("2021-01-02")))
 
         println("## withKeyFilterDF")
         withKeyFilterDF.show(30)
 
-        anchors.map(anchor => (anchor, withKeyDF))
+        anchors.map(anchor => (anchor, withKeyFilterDF))
     })
 
     val allInferredFeatureTypes = mutable.Map.empty[String, FeatureTypeConfig]
