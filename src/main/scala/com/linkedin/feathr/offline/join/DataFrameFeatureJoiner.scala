@@ -318,7 +318,9 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       finalDF.show(false)
     }
 
-    val materializedView = ss.read.csv("")
+    val materializedFeatures = ss.read.csv("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/feathr_dataset/user_observation_mock_data.csv")
+    println("## SHOW MaterializedFeatures DataFrame")
+    materializedFeatures.show(30)
 
     (finalDF, header)
   }
