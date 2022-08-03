@@ -202,11 +202,6 @@ def main():
                                              feature_type=FLOAT,
                                              transform="gift_card_balance")
 
-    feature_user_has_valid_credit_card = Feature(name="feature_user_has_valid_credit_card",
-                                                 key=user_id,
-                                                 feature_type=BOOLEAN,
-                                                 transform="number_of_credit_cards > 0")
-
     user_profile_source = HdfsSource(name="user_profile_data",
                                      path=user_profile_abfss,
                                      preprocessing=feathr_udf_preprocessing)
@@ -215,8 +210,7 @@ def main():
                                       source=user_profile_source,
                                       features=[feature_user_age,
                                                 feature_user_tax_rate,
-                                                feature_user_gift_card_balance,
-                                                feature_user_has_valid_credit_card])
+                                                feature_user_gift_card_balance])
 
     #################################
     # define aggregated anchored key
@@ -258,7 +252,6 @@ def main():
     feature_query = FeatureQuery(feature_list=["feature_user_age",
                                                "feature_user_tax_rate",
                                                "feature_user_gift_card_balance",
-                                               "feature_user_has_valid_credit_card",
                                                "feature_user_total_purchase_in_90days"],
                                  key=user_id)
 

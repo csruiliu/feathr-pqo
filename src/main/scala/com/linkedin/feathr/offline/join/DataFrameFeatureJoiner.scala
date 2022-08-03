@@ -318,13 +318,13 @@ private[offline] class DataFrameFeatureJoiner(logicalPlan: MultiStageJoinPlan, d
       finalDF.show(false)
     }
 
-    val materializedFeatures = ss.read.option("header", value = true).csv("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/feathr_dataset/user_observation_mock_data.csv")
+    val materializedFeatures = ss.read.option("header", value = true).csv("abfss://feathrpqoplusfs@feathrpqoplusdls.dfs.core.windows.net/feathr_dataset/materialize_features.csv")
     println("## SHOW MaterializedFeatures DataFrame")
     materializedFeatures.show(30)
 
-    val finalUnionDF = finalDF.union(materializedFeatures)
+    // val finalUnionDF = finalDF.union(materializedFeatures)
 
-    (finalUnionDF, header)
+    (finalDF, header)
   }
 
   /**
