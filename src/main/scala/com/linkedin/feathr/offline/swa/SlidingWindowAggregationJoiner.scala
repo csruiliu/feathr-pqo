@@ -19,7 +19,7 @@ import com.linkedin.feathr.offline.{FeatureDataFrame, JoinStage}
 import com.linkedin.feathr.swj.{LabelData, SlidingWindowJoin}
 import com.linkedin.feathr.{common, offline}
 import org.apache.log4j.Logger
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.util.sketch.BloomFilter
 
@@ -174,8 +174,13 @@ private[offline] class SlidingWindowAggregationJoiner(
           case keyExtractor => keyExtractor.appendKeyColumns(sourceDF)
         }
 
-        println("## withKeyDF")
+        println("## SHOW withKeyDF")
         withKeyDF.show(30)
+
+        val withKeyFilterDF = withKeyDF.filter(withKeyDF("purchase_date").leq(lit("2021-01-01")))
+
+        println("## withKeyFilterDF")
+        withKeyFilterDF.show(30)
 
         anchors.map(anchor => (anchor, withKeyDF))
     })
